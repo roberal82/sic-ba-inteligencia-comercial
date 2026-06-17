@@ -1,0 +1,4 @@
+pandas
+pdfplumber
+python-dateutil
+openpyxl
