@@ -2,3 +2,5 @@ pandas
 pdfplumber
 python-dateutil
 openpyxl
+streamlit
+plotly
