@@ -1,8 +1,8 @@
 """
-SIC-BA Extractor PDFs Valurq v1.0
+SIC-BA Extractor PDFs Valurq v1.1
 Autor: Blanco & Asociados / Proyecto SIC-BA
 
-Este script detecta reportes PDF del ERP Valurq y genera tablas base.
+Detecta reportes PDF del ERP Valurq y genera tablas limpias.
 """
 
 from pathlib import Path
@@ -13,8 +13,7 @@ import datetime as dt
 try:
     import pdfplumber
 except ImportError as exc:
-    raise SystemExit("Instale dependencias: pip install pdfplumber pandas python-dateutil openpyxl") from exc
-
+    raise SystemExit("Instale dependencias: pip install -r requirements.txt") from exc
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_RAW = ROOT / "data_raw"
@@ -22,7 +21,6 @@ DATA_CLEAN = ROOT / "data_clean"
 
 
 def read_pdf_text(pdf_path: Path) -> str:
-    """Extrae texto de un PDF usando pdfplumber."""
     text_parts = []
     with pdfplumber.open(pdf_path) as pdf:
         for page in pdf.pages:
@@ -31,10 +29,9 @@ def read_pdf_text(pdf_path: Path) -> str:
 
 
 def parse_amount(value: str) -> float:
-    """Convierte montos paraguayos tipo 1.234.567,89 a float."""
     if value is None:
         return 0.0
-    value = value.strip().replace(".", "").replace(",", ".")
+    value = str(value).strip().replace(".", "").replace(",", ".")
     try:
         return float(value)
     except ValueError:
@@ -47,16 +44,19 @@ def detect_report_type(text: str) -> str:
         return "pendientes_cobrar"
     if "REPORTE DE PENDIENTES A PAGAR" in t or "PENDIENTES A PAGAR" in t:
         return "pendientes_pagar"
+    if "GESTIÓN DE VENTAS" in t or "GESTION DE VENTAS" in t:
+        return "gestion_ventas"
+    if "INFORME DE VENTAS" in t:
+        return "ventas_producto"
     if "REPORTE DE COMPRAS" in t:
         return "compras"
     return "desconocido"
 
 
 def parse_pendientes_cobrar(text: str, source_file: str) -> list[dict]:
-    """Parser inicial para pendientes por cobrar de Valurq."""
     rows = []
     current_client = None
-    current_currency = "GUARANIES"
+    current_currency = "PYG"
 
     for line in text.splitlines():
         line_clean = " ".join(line.split())
@@ -84,12 +84,10 @@ def parse_pendientes_cobrar(text: str, source_file: str) -> list[dict]:
                 "total": parse_amount(total),
                 "saldo": parse_amount(saldo),
             })
-
     return rows
 
 
 def parse_pendientes_pagar(text: str, source_file: str) -> list[dict]:
-    """Parser inicial para pendientes a pagar de Valurq."""
     rows = []
     current_provider = None
     current_currency = "PYG"
@@ -124,12 +122,10 @@ def parse_pendientes_pagar(text: str, source_file: str) -> list[dict]:
                 "total_factura": parse_amount(total_factura),
                 "saldo": parse_amount(saldo),
             })
-
     return rows
 
 
 def parse_compras(text: str, source_file: str) -> list[dict]:
-    """Parser inicial para reporte de compras por proveedor/producto."""
     rows = []
     current_provider = None
 
@@ -152,7 +148,78 @@ def parse_compras(text: str, source_file: str) -> list[dict]:
                 "cantidad": parse_amount(cantidad),
                 "total": parse_amount(total),
             })
+    return rows
 
+
+def parse_gestion_ventas(text: str, source_file: str) -> list[dict]:
+    """Extrae ventas resumidas por factura desde Gestión de Ventas."""
+    rows = []
+    for line in text.splitlines():
+        line_clean = " ".join(line.split())
+        if not line_clean.startswith("001-001-"):
+            continue
+        if "ANULADO" in line_clean.upper():
+            continue
+
+        m = re.search(
+            r"(001-001-\d{7})\s+(\d{1,2}/\d{1,2}/\d{4})\s+(.+?)\s+([\d\.]+)\s+([\d\,]+)\s+([\d\.]+)\s+([\d\,]+)$",
+            line_clean,
+        )
+        if m:
+            factura, fecha, cliente, contado_gs, contado_usd, credito_gs, credito_usd = m.groups()
+            rows.append({
+                "fuente": source_file,
+                "factura": factura,
+                "fecha": fecha,
+                "cliente": cliente.strip(),
+                "venta_contado_gs": parse_amount(contado_gs),
+                "venta_contado_usd": parse_amount(contado_usd),
+                "venta_credito_gs": parse_amount(credito_gs),
+                "venta_credito_usd": parse_amount(credito_usd),
+                "total_gs": parse_amount(contado_gs) + parse_amount(credito_gs),
+                "total_usd": parse_amount(contado_usd) + parse_amount(credito_usd),
+            })
+    return rows
+
+
+def parse_ventas_producto(text: str, source_file: str) -> list[dict]:
+    """Extrae informe de ventas por cliente/producto."""
+    rows = []
+    current_client = None
+    current_product = None
+
+    for line in text.splitlines():
+        line_clean = " ".join(line.split())
+
+        if line_clean.startswith("Cliente:"):
+            current_client = line_clean.replace("Cliente:", "").strip()
+            current_product = None
+            continue
+
+        if line_clean.startswith("Emisión Factura") or line_clean.startswith("Totales producto") or line_clean.startswith("Total cliente"):
+            continue
+
+        if line_clean and not line_clean.startswith(("Página", "INFORME", "Desde:", "Moneda:", "robert", "REMOTE")):
+            if not re.match(r"\d{1,2}/\d{1,2}/\d{4}\s+001-001-", line_clean) and "PRY" not in line_clean:
+                current_product = line_clean.strip()
+
+        m = re.search(
+            r"(\d{1,2}/\d{1,2}/\d{4})\s+(001-001-\d{7})\s+(\w+)\s+(\S+)\s+(\S+)\s+(\S+)\s+([\d\.\,]+)\s+([\d\.]+)$",
+            line_clean,
+        )
+        if m and current_client and current_product:
+            fecha, factura, moneda, ot, c, lote, cantidad, total = m.groups()
+            rows.append({
+                "fuente": source_file,
+                "cliente": current_client,
+                "producto": current_product,
+                "fecha": fecha,
+                "factura": factura,
+                "moneda": moneda,
+                "ot": ot,
+                "cantidad": parse_amount(cantidad),
+                "total": parse_amount(total),
+            })
     return rows
 
 
@@ -173,6 +240,8 @@ def main() -> None:
     all_cobros = []
     all_pagos = []
     all_compras = []
+    all_ventas = []
+    all_ventas_producto = []
     log_rows = []
 
     for pdf_path in DATA_RAW.glob("*.pdf"):
@@ -188,6 +257,12 @@ def main() -> None:
         elif report_type == "compras":
             rows = parse_compras(text, pdf_path.name)
             all_compras.extend(rows)
+        elif report_type == "gestion_ventas":
+            rows = parse_gestion_ventas(text, pdf_path.name)
+            all_ventas.extend(rows)
+        elif report_type == "ventas_producto":
+            rows = parse_ventas_producto(text, pdf_path.name)
+            all_ventas_producto.extend(rows)
         else:
             rows = []
 
@@ -201,12 +276,16 @@ def main() -> None:
     write_csv(DATA_CLEAN / "fact_cobros.csv", all_cobros)
     write_csv(DATA_CLEAN / "fact_pagos.csv", all_pagos)
     write_csv(DATA_CLEAN / "fact_compras.csv", all_compras)
+    write_csv(DATA_CLEAN / "fact_ventas.csv", all_ventas)
+    write_csv(DATA_CLEAN / "fact_ventas_producto.csv", all_ventas_producto)
     write_csv(DATA_CLEAN / "log_carga.csv", log_rows)
 
     print("Carga terminada")
     print(f"Cobros: {len(all_cobros)}")
     print(f"Pagos: {len(all_pagos)}")
     print(f"Compras: {len(all_compras)}")
+    print(f"Ventas: {len(all_ventas)}")
+    print(f"Ventas producto: {len(all_ventas_producto)}")
 
 
 if __name__ == "__main__":
