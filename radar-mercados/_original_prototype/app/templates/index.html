@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Radar Regional de Mercados</title>
+<link rel="preconnect" href="https://unpkg.com">
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#071018;--panel:#0d1722;--panel2:#121f2d;--panel3:#17283a;
+  --line:#25394d;--text:#f2f6fa;--muted:#91a0af;--accent:#f0a535;
+  --green:#26c281;--red:#ff6472;--blue:#4ca4ff;--yellow:#f1cf59;
+}
+*{box-sizing:border-box}
+body{margin:0;background:linear-gradient(180deg,#061018,#0a1119);color:var(--text);
+font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+header{position:sticky;top:0;z-index:1000;background:rgba(6,16,24,.94);
+backdrop-filter:blur(14px);border-bottom:1px solid var(--line);padding:16px 22px}
+.header-row{max-width:1650px;margin:auto;display:flex;align-items:center;justify-content:space-between;gap:20px}
+.brand h1{margin:0;font-size:clamp(23px,3vw,38px);letter-spacing:.05em}
+.brand p{margin:5px 0 0;color:var(--muted);font-size:13px}
+.controls{display:flex;flex-wrap:wrap;gap:8px}
+button,select,input{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+button{cursor:pointer;font-weight:800}
+button:hover{border-color:var(--accent)}
+main{max-width:1650px;margin:auto;padding:18px 22px 42px}
+.status{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px;margin-bottom:14px}
+.dot{width:9px;height:9px;background:var(--green);border-radius:50%;box-shadow:0 0 12px var(--green)}
+.country-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.country-tab{padding:9px 14px;border-radius:999px;background:var(--panel2);border:1px solid var(--line);cursor:pointer;font-weight:800;font-size:13px}
+.country-tab.active{background:var(--accent);color:#131313;border-color:var(--accent)}
+.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:14px}
+.card{background:linear-gradient(180deg,var(--panel),#0a131d);border:1px solid var(--line);
+border-radius:16px;padding:16px;min-width:0;box-shadow:0 12px 30px rgba(0,0,0,.16)}
+.card h2{margin:0 0 13px;font-size:13px;color:var(--accent);text-transform:uppercase;letter-spacing:.08em}
+.kpis{grid-column:span 12;display:grid;grid-template-columns:repeat(8,1fr);gap:10px}
+.kpi{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:13px}
+.kpi .label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.kpi .value{font-size:21px;font-weight:900;margin-top:5px}
+.kpi .delta{font-size:12px;margin-top:3px}
+.up{color:var(--green)}.down{color:var(--red)}.neutral{color:var(--yellow)}
+.span-4{grid-column:span 4}.span-5{grid-column:span 5}.span-6{grid-column:span 6}
+.span-7{grid-column:span 7}.span-8{grid-column:span 8}.span-12{grid-column:span 12}
+canvas{max-height:350px}
+#map{height:430px;border-radius:12px}
+.table-wrap{overflow:auto;max-height:420px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:10px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{color:var(--muted);font-size:11px;position:sticky;top:0;background:var(--panel)}
+.badge{display:inline-block;padding:4px 8px;border-radius:999px;font-size:10px;font-weight:900}
+.high{background:rgba(255,100,114,.14);color:var(--red)}
+.medium{background:rgba(241,207,89,.14);color:var(--yellow)}
+.low{background:rgba(38,194,129,.14);color:var(--green)}
+.analysis-box{background:var(--panel2);border-left:3px solid var(--accent);padding:12px 14px;border-radius:10px;margin-bottom:10px}
+.analysis-box strong{display:block;margin-bottom:5px}.analysis-box p{margin:0;color:#cbd4dd;line-height:1.45;font-size:13px}
+.metric-row{display:grid;grid-template-columns:1fr auto;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.metric-row:last-child{border-bottom:0}
+.metric-name{color:#cbd4dd}.metric-value{font-weight:900}
+.disclaimer{margin-top:12px;color:var(--muted);font-size:11px;line-height:1.45}
+.config{margin-top:10px;padding:12px;border:1px dashed var(--line);border-radius:12px}
+.config summary{cursor:pointer;font-weight:800;color:var(--blue)}
+.config-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+footer{max-width:1650px;margin:auto;padding:0 22px 28px;color:var(--muted);font-size:11px}
+@media(max-width:1200px){.kpis{grid-template-columns:repeat(4,1fr)}.span-4,.span-5,.span-6,.span-7,.span-8{grid-column:span 12}}
+@media(max-width:700px){header,main{padding-left:12px;padding-right:12px}.header-row{align-items:flex-start;flex-direction:column}.kpis{grid-template-columns:repeat(2,1fr)}.config-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <div class="header-row">
+    <div class="brand">
+      <h1>RADAR REGIONAL DE MERCADOS</h1>
+      <p>Brasil, Paraguay, Argentina, mercados globales y riesgo geopolítico</p>
+    </div>
+    <div class="controls">
+      <select id="period">
+        <option value="1">24 horas</option>
+        <option value="7" selected>7 días</option>
+        <option value="30">30 días</option>
+        <option value="90">90 días</option>
+      </select>
+      <button id="refresh">↻ Actualizar</button>
+      <button id="mode">Modo DEMO</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="status"><span class="dot"></span><span id="statusText">Panel operativo con datos de demostración</span><span>•</span><span id="updated"></span></div>
+  <div class="country-tabs">
+    <button class="country-tab active" data-country="regional">Regional</button>
+    <button class="country-tab" data-country="brasil">Brasil</button>
+    <button class="country-tab" data-country="paraguay">Paraguay</button>
+    <button class="country-tab" data-country="argentina">Argentina</button>
+    <button class="country-tab" data-country="global">Global</button>
+  </div>
+
+  <section class="grid">
+    <div class="kpis" id="kpis"></div>
+
+    <article class="card span-8"><h2>Índices regionales — evolución normalizada</h2><canvas id="indicesChart"></canvas></article>
+    <article class="card span-4"><h2>Rendimiento semanal</h2><canvas id="weeklyChart"></canvas></article>
+
+    <article class="card span-6"><h2>Tipos de cambio regionales</h2><canvas id="fxChart"></canvas></article>
+    <article class="card span-6"><h2>Tasas de referencia e inflación</h2><canvas id="ratesChart"></canvas></article>
+
+    <article class="card span-7"><h2>Mapa georreferenciado de eventos</h2><div id="map"></div></article>
+    <article class="card span-5"><h2>Análisis automatizado</h2><div id="analysis"></div></article>
+
+    <article class="card span-7"><h2>Eventos recientes y activos sensibles</h2>
+      <div class="table-wrap"><table><thead><tr><th>Evento</th><th>País/Zona</th><th>Impacto</th><th>Activos</th><th>Riesgo</th></tr></thead><tbody id="eventsBody"></tbody></table></div>
+    </article>
+    <article class="card span-5"><h2>Riesgo comparado por país</h2><canvas id="riskRadar"></canvas></article>
+
+    <article class="card span-6"><h2>Comportamiento sectorial regional</h2><canvas id="sectorChart"></canvas></article>
+    <article class="card span-6"><h2>Asignación orientativa por escenario</h2><canvas id="allocationChart"></canvas><div class="disclaimer">Modelo educativo y no personalizado. No constituye asesoramiento financiero ni garantiza rendimiento.</div></article>
+
+    <article class="card span-6"><h2>Lectura rápida por mercado</h2><div id="countrySummary"></div></article>
+    <article class="card span-6"><h2>Fuentes y conexión en vivo</h2>
+      <div class="analysis-box"><strong>Arquitectura recomendada</strong><p>Backend propio con FastAPI o Node.js, base de datos y tareas programadas. El navegador consume una sola API segura.</p></div>
+      <details class="config">
+        <summary>Configurar endpoints</summary>
+        <div class="config-grid">
+          <label>Backend consolidado<input id="backendUrl" placeholder="https://tu-servidor/api/dashboard"></label>
+          <label>Actualización automática<input id="refreshMinutes" value="15"></label>
+          <label>Fuente Brasil<input value="Banco Central do Brasil / B3"></label>
+          <label>Fuente Paraguay<input value="Banco Central del Paraguay / BVPASA"></label>
+          <label>Fuente Argentina<input value="BCRA / BYMA"></label>
+          <label>Noticias geopolíticas<input value="GDELT / RSS oficiales"></label>
+        </div>
+      </details>
+    </article>
+  </section>
+</main>
+<footer>Prototipo profesional. Los valores visibles son ilustrativos y deben sustituirse por datos oficiales o APIs contratadas antes de uso operativo.</footer>
+
+<script>
+const datasets = {
+regional:{
+ kpis:[
+  ["Bovespa","127.850","+0,64%","up"],["S&P Merval","1.488.450","-0,41%","down"],
+  ["BVPASA","1.102","+0,18%","up"],["USD/BRL","5,077","+0,22%","neutral"],
+  ["USD/PYG","7.650","+0,08%","neutral"],["USD/ARS MEP","1.516","+0,50%","neutral"],
+  ["Riesgo Argentina","430 p","estable","neutral"],["Oro","USD 4.108","+0,90%","up"]
+ ],
+ indices:{
+  labels:["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"],
+  series:[
+   {label:"Brasil",data:[100,100.4,101.1,100.7,101.4,101.9,102.3]},
+   {label:"Paraguay",data:[100,100.1,100.2,100.5,100.6,100.7,100.9]},
+   {label:"Argentina",data:[100,99.4,100.2,98.9,99.8,99.3,99.6]},
+   {label:"Global",data:[100,100.6,100.9,101.2,101.5,101.9,102.1]}
+  ]
+ },
+ weekly:[["Brasil",2.3],["Paraguay",0.9],["Argentina",-0.4],["Global",2.1]],
+ fx:{labels:["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"],brl:[5.03,5.05,5.04,5.06,5.07,5.08,5.077],pyg:[7610,7620,7635,7640,7645,7648,7650],ars:[1490,1495,1500,1504,1510,1513,1516]},
+ rates:[["Brasil",10.50,4.2],["Paraguay",6.00,3.8],["Argentina",29.00,24.5]],
+ sectors:[["Energía",3.1],["Financiero",1.7],["Agro",2.4],["Industria",0.8],["Tecnología",2.2],["Consumo",-0.6]],
+ allocation:[["Liquidez",20],["Bonos alta calidad",20],["Oro",15],["Acciones globales",25],["Brasil",10],["Paraguay",5],["Argentina táctica",5]]
+},
+brasil:{summary:"Brasil mantiene la mayor profundidad bursátil de la región. Energía, bancos y materias primas dominan el índice. La tasa Selic y el real son los principales factores de sensibilidad."},
+paraguay:{summary:"Paraguay presenta menor liquidez bursátil, pero estabilidad macroeconómica relativa. El análisis debe concentrarse en bonos, tipo de cambio, inflación, agronegocios, infraestructura y riesgo de concentración."},
+argentina:{summary:"Argentina ofrece mayor volatilidad y potencial táctico. El riesgo país, la brecha cambiaria, la regulación y la liquidez siguen siendo variables críticas."},
+global:{summary:"El entorno global combina renta variable positiva con riesgos geopolíticos en energía y transporte. Tasas largas, dólar, petróleo y oro son los indicadores de control."}
+};
+
+const events=[
+ {title:"Riesgo logístico en Ormuz",zone:"Golfo Pérsico",lat:26.57,lng:56.25,impact:"Petróleo y fletes",assets:"Brent, WTI, oro",risk:"high"},
+ {title:"Tensión en Mar Rojo",zone:"Yemen / Mar Rojo",lat:15.55,lng:42.55,impact:"Seguros y transporte",assets:"Navieras, energía",risk:"high"},
+ {title:"Flujo de capital hacia Brasil",zone:"São Paulo",lat:-23.55,lng:-46.63,impact:"Apoyo a renta variable",assets:"Bovespa, BRL",risk:"medium"},
+ {title:"Cosecha y exportaciones",zone:"Paraguay",lat:-25.30,lng:-57.64,impact:"Divisas y actividad",assets:"Agro, PYG, logística",risk:"medium"},
+ {title:"Riesgo país y MEP",zone:"Buenos Aires",lat:-34.60,lng:-58.38,impact:"Volatilidad financiera",assets:"Bonos, Merval, ARS",risk:"high"},
+ {title:"Demanda de materias primas",zone:"China",lat:39.90,lng:116.40,impact:"Minería y agro regional",assets:"Soja, hierro, cobre",risk:"medium"}
+];
+
+let charts={}; let currentCountry="regional";
+
+function renderKPIs(){
+ document.getElementById("kpis").innerHTML=datasets.regional.kpis.map(x=>`
+ <div class="kpi"><div class="label">${x[0]}</div><div class="value ${x[3]}">${x[1]}</div><div class="delta ${x[3]}">${x[2]}</div></div>`).join("");
+}
+
+function makeChart(id,type,data,options={}){
+ if(charts[id]) charts[id].destroy();
+ charts[id]=new Chart(document.getElementById(id),{type,data,options:{responsive:true,maintainAspectRatio:true,
+  plugins:{legend:{labels:{color:"#dce5ed",boxWidth:12}},tooltip:{mode:"index",intersect:false}},
+  scales:type==="doughnut"||type==="radar"?{}:{x:{ticks:{color:"#a9b5c0"},grid:{color:"#1b2c3c"}},y:{ticks:{color:"#91a0af"},grid:{color:"#1b2c3c"}}},
+  ...options}});
+}
+
+function renderCharts(){
+ const d=datasets.regional;
+ makeChart("indicesChart","line",{labels:d.indices.labels,datasets:d.indices.series.map(s=>({label:s.label,data:s.data,tension:.35,borderWidth:2,pointRadius:2}))});
+ makeChart("weeklyChart","bar",{labels:d.weekly.map(x=>x[0]),datasets:[{label:"Variación %",data:d.weekly.map(x=>x[1]),backgroundColor:d.weekly.map(x=>x[1]>=0?"rgba(38,194,129,.7)":"rgba(255,100,114,.7)")} ]},{plugins:{legend:{display:false}}});
+ makeChart("fxChart","line",{labels:d.fx.labels,datasets:[
+  {label:"USD/BRL",data:d.fx.brl,yAxisID:"y",tension:.3},
+  {label:"USD/PYG ÷ 1500",data:d.fx.pyg.map(v=>v/1500),yAxisID:"y",tension:.3},
+  {label:"USD/ARS ÷ 300",data:d.fx.ars.map(v=>v/300),yAxisID:"y",tension:.3}
+ ]});
+ makeChart("ratesChart","bar",{labels:d.rates.map(x=>x[0]),datasets:[
+  {label:"Tasa de referencia %",data:d.rates.map(x=>x[1])},
+  {label:"Inflación estimada %",data:d.rates.map(x=>x[2])}
+ ]});
+ makeChart("sectorChart","bar",{labels:d.sectors.map(x=>x[0]),datasets:[{label:"Variación %",data:d.sectors.map(x=>x[1]),backgroundColor:d.sectors.map(x=>x[1]>=0?"rgba(76,164,255,.72)":"rgba(255,100,114,.72)")} ]},{plugins:{legend:{display:false}}});
+ makeChart("allocationChart","doughnut",{labels:d.allocation.map(x=>x[0]),datasets:[{data:d.allocation.map(x=>x[1]),borderColor:"#0d1722",borderWidth:3}]},{plugins:{legend:{position:"right",labels:{color:"#dce5ed",boxWidth:12}}}});
+ makeChart("riskRadar","radar",{labels:["Riesgo político","Volatilidad FX","Liquidez","Inflación","Riesgo externo"],datasets:[
+  {label:"Brasil",data:[35,45,20,40,50]},
+  {label:"Paraguay",data:[25,30,55,30,40]},
+  {label:"Argentina",data:[80,85,45,75,55]}
+ ]},{scales:{r:{min:0,max:100,ticks:{display:false},grid:{color:"#31475b"},angleLines:{color:"#31475b"},pointLabels:{color:"#cbd4dd"}}}});
+}
+
+function renderEvents(){
+ document.getElementById("eventsBody").innerHTML=events.map(e=>`<tr><td>${e.title}</td><td>${e.zone}</td><td>${e.impact}</td><td>${e.assets}</td><td><span class="badge ${e.risk}">${e.risk==="high"?"ALTO":e.risk==="medium"?"MEDIO":"BAJO"}</span></td></tr>`).join("");
+}
+
+function renderAnalysis(){
+ document.getElementById("analysis").innerHTML=`
+ <div class="analysis-box"><strong>Brasil</strong><p>Mayor profundidad de mercado. Sesgo favorable en bancos, energía y exportadores si el real permanece estable.</p></div>
+ <div class="analysis-box"><strong>Paraguay</strong><p>Menor liquidez bursátil. Priorizar renta fija, instrumentos bancarios, agronegocios e infraestructura con análisis crediticio.</p></div>
+ <div class="analysis-box"><strong>Argentina</strong><p>Oportunidad táctica con riesgo elevado. Limitar tamaño de posición y vigilar riesgo país, dólar financiero y reservas.</p></div>
+ <div class="analysis-box"><strong>Entorno global</strong><p>La tensión en Ormuz y Mar Rojo sostiene energía y oro. Las tasas largas condicionan tecnología y activos emergentes.</p></div>`;
+}
+
+function renderSummary(country){
+ const summaries={
+ regional:"Visión comparada: Brasil aporta profundidad, Paraguay estabilidad relativa y Argentina mayor volatilidad. La estrategia debe diversificar por país, moneda y clase de activo.",
+ brasil:datasets.brasil.summary,paraguay:datasets.paraguay.summary,argentina:datasets.argentina.summary,global:datasets.global.summary
+ };
+ document.getElementById("countrySummary").innerHTML=`
+ <div class="analysis-box"><strong>${country.charAt(0).toUpperCase()+country.slice(1)}</strong><p>${summaries[country]}</p></div>
+ <div class="metric-row"><span class="metric-name">Horizonte sugerido</span><span class="metric-value">${country==="argentina"?"Táctico / corto-medio":country==="paraguay"?"Medio-largo":"Medio"}</span></div>
+ <div class="metric-row"><span class="metric-name">Riesgo estimado</span><span class="metric-value ${country==="argentina"?"down":country==="paraguay"?"up":"neutral"}">${country==="argentina"?"Alto":country==="paraguay"?"Moderado":"Moderado-alto"}</span></div>
+ <div class="metric-row"><span class="metric-name">Variable clave</span><span class="metric-value">${country==="brasil"?"Selic y BRL":country==="paraguay"?"Inflación y PYG":country==="argentina"?"Riesgo país y MEP":country==="global"?"Tasas y energía":"Diversificación"}</span></div>`;
+}
+
+const map=L.map("map",{worldCopyJump:true}).setView([-15,-55],3);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"}).addTo(map);
+events.forEach(e=>{
+ const c=e.risk==="high"?"#ff6472":e.risk==="medium"?"#f1cf59":"#26c281";
+ L.circleMarker([e.lat,e.lng],{radius:9,color:c,fillColor:c,fillOpacity:.78,weight:2}).addTo(map)
+  .bindPopup(`<b>${e.title}</b><br>${e.zone}<br>${e.impact}<br><b>Activos:</b> ${e.assets}`);
+});
+
+document.querySelectorAll(".country-tab").forEach(btn=>{
+ btn.addEventListener("click",()=>{
+  document.querySelectorAll(".country-tab").forEach(x=>x.classList.remove("active"));
+  btn.classList.add("active"); currentCountry=btn.dataset.country; renderSummary(currentCountry);
+ });
+});
+
+document.getElementById("refresh").addEventListener("click",async()=>{
+ const btn=document.getElementById("refresh"); btn.disabled=true; btn.textContent="Actualizando…";
+ const url=document.getElementById("backendUrl").value.trim();
+ try{
+  if(!url) throw new Error("Sin backend");
+  const r=await fetch(url,{cache:"no-store"}); if(!r.ok) throw new Error("HTTP "+r.status);
+  const live=await r.json(); console.log(live);
+  document.getElementById("statusText").textContent="Datos en vivo recibidos";
+ }catch(e){
+  document.getElementById("statusText").textContent="Modo demo: configure el backend consolidado";
+ }
+ document.getElementById("updated").textContent="Último intento: "+new Date().toLocaleString("es-PY");
+ setTimeout(()=>{btn.disabled=false;btn.textContent="↻ Actualizar"},500);
+});
+
+renderKPIs();renderCharts();renderEvents();renderAnalysis();renderSummary("regional");
+document.getElementById("updated").textContent="Última carga: "+new Date().toLocaleString("es-PY");
+</script>
+</body>
+</html>
