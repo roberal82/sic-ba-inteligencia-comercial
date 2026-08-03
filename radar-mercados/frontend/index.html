@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Radar Regional de Mercados</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌎</text></svg>">
+<link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css"/>
+<script src="/static/vendor/leaflet/leaflet.js"></script>
+<script src="/static/vendor/chartjs/chart.umd.js"></script>
+<link rel="stylesheet" href="/static/css/styles.css"/>
+</head>
+<body>
+<header>
+  <div class="header-row">
+    <div class="brand">
+      <h1>RADAR REGIONAL DE MERCADOS</h1>
+      <p>Paraguay, Brasil, Argentina, mercados globales y riesgo geopolítico</p>
+    </div>
+    <div class="controls">
+      <select id="period">
+        <option value="1">24 horas</option>
+        <option value="7" selected>7 días</option>
+        <option value="30">30 días</option>
+        <option value="90">90 días</option>
+        <option value="365">1 año</option>
+      </select>
+      <button id="refreshBtn">↻ Actualizar</button>
+      <span class="badge-mode" id="modeBadge">—</span>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="status-bar">
+    <span class="dot" id="statusDot"></span>
+    <span id="statusText">Cargando panel…</span>
+    <span>•</span>
+    <span id="updatedText"></span>
+    <span>•</span>
+    <span id="apiText"></span>
+  </div>
+
+  <div class="country-tabs" id="countryTabs">
+    <button class="country-tab active" data-country="regional">Regional</button>
+    <button class="country-tab" data-country="brasil">Brasil</button>
+    <button class="country-tab" data-country="paraguay">Paraguay</button>
+    <button class="country-tab" data-country="argentina">Argentina</button>
+    <button class="country-tab" data-country="global">Global</button>
+  </div>
+
+  <section class="grid">
+    <div class="kpis" id="kpis"></div>
+
+    <article class="card span-6">
+      <div class="card-head"><h2>1–2. Variación por índice y rendimiento de la sesión</h2>
+        <div class="card-actions"><button class="small" data-export-csv="perfChart">CSV</button><button class="small" data-export-png="perfChart">PNG</button></div>
+      </div>
+      <canvas id="perfChart"></canvas>
+      <div class="card-meta" id="perfMeta"></div>
+    </article>
+
+    <article class="card span-6">
+      <div class="card-head"><h2>3. Tipos de cambio regionales</h2>
+        <div class="card-actions"><button class="small" data-export-csv="fxChart">CSV</button><button class="small" data-export-png="fxChart">PNG</button></div>
+      </div>
+      <canvas id="fxChart"></canvas>
+      <div class="card-meta" id="fxMeta"></div>
+    </article>
+
+    <article class="card span-6">
+      <div class="card-head"><h2>4–5. Tasas de referencia e inflación comparada</h2>
+        <div class="card-actions"><button class="small" data-export-csv="ratesChart">CSV</button><button class="small" data-export-png="ratesChart">PNG</button></div>
+      </div>
+      <canvas id="ratesChart"></canvas>
+      <div class="card-meta" id="ratesMeta"></div>
+    </article>
+
+    <article class="card span-6">
+      <div class="card-head"><h2>6. Riesgo comparado por país</h2>
+        <div class="card-actions"><button class="small" data-export-png="riskRadar">PNG</button></div>
+      </div>
+      <canvas id="riskRadar"></canvas>
+      <div class="card-meta">Índice compuesto orientativo (riesgo país, inflación, volatilidad FX del día). No es una calificación crediticia oficial.</div>
+    </article>
+
+    <article class="card span-7">
+      <div class="card-head"><h2>Mapa georreferenciado de eventos</h2></div>
+      <div class="filters-row">
+        <select id="filterSeverity"><option value="">Severidad: todas</option><option value="high">Alta</option><option value="medium">Media</option><option value="low">Baja</option></select>
+        <select id="filterCountryMap"><option value="">País: todos</option></select>
+        <select id="filterType"><option value="">Tipo: todos</option></select>
+      </div>
+      <div id="map"></div>
+    </article>
+    <article class="card span-5">
+      <div class="card-head"><h2>Análisis automatizado</h2></div>
+      <div id="analysis"></div>
+    </article>
+
+    <article class="card span-7">
+      <div class="card-head"><h2>Eventos recientes y activos sensibles</h2>
+        <div class="card-actions"><button class="small" id="exportEventsCsv">CSV</button></div>
+      </div>
+      <div class="table-wrap"><table><thead><tr><th>Evento</th><th>País/Zona</th><th>Impacto</th><th>Activos</th><th>Riesgo</th><th>Fuente</th></tr></thead><tbody id="eventsBody"></tbody></table></div>
+    </article>
+    <article class="card span-5">
+      <div class="card-head"><h2>Semáforo de riesgo por país</h2></div>
+      <div id="riskSemaphore"></div>
+    </article>
+
+    <article class="card span-6">
+      <div class="card-head"><h2>7. Curva de commodities</h2>
+        <div class="card-actions"><button class="small" data-export-csv="commoditiesChart">CSV</button><button class="small" data-export-png="commoditiesChart">PNG</button></div>
+      </div>
+      <canvas id="commoditiesChart"></canvas>
+    </article>
+    <article class="card span-6">
+      <div class="card-head"><h2>8. Oro vs. dólar (DXY) — historial acumulado</h2></div>
+      <div id="goldDxyContainer"><canvas id="goldDxyChart"></canvas></div>
+    </article>
+
+    <article class="card span-6">
+      <div class="card-head"><h2>9. Petróleo vs. eventos geopolíticos</h2></div>
+      <div id="oilEventsContainer"><canvas id="oilChart"></canvas></div>
+    </article>
+    <article class="card span-6">
+      <div class="card-head"><h2>10. Bitcoin vs. Nasdaq (variación de la sesión)</h2>
+        <div class="card-actions"><button class="small" data-export-png="btcNasdaqChart">PNG</button></div>
+      </div>
+      <canvas id="btcNasdaqChart"></canvas>
+    </article>
+
+    <article class="card span-6">
+      <div class="card-head"><h2>11. Heatmap sectorial (variación por categoría de activo)</h2></div>
+      <div class="table-wrap"><table class="heatmap-table"><thead><tr id="heatmapHead"></tr></thead><tbody id="heatmapBody"></tbody></table></div>
+    </article>
+    <article class="card span-6">
+      <div class="card-head"><h2>12. Volatilidad (VIX en vivo como proxy)</h2></div>
+      <div id="volatilityContainer"></div>
+    </article>
+
+    <article class="card span-6">
+      <div class="card-head"><h2>13. Correlación entre activos</h2></div>
+      <div id="correlationContainer" class="empty-state"></div>
+    </article>
+    <article class="card span-6">
+      <div class="card-head"><h2>14–15. Distribución por país y por clase de activo</h2></div>
+      <div style="display:flex;gap:14px;">
+        <div style="flex:1"><canvas id="countryDistChart"></canvas></div>
+        <div style="flex:1"><canvas id="assetDistChart"></canvas></div>
+      </div>
+    </article>
+
+    <article class="card span-6">
+      <div class="card-head"><h2>16. Volumen negociado</h2></div>
+      <div class="empty-state">No disponible: ninguna fuente sin costo conectada expone volumen negociado. Requiere proveedor contratado (Twelve Data, Polygon.io o Alpha Vantage) — ver panel de fuentes.</div>
+    </article>
+    <article class="card span-6">
+      <div class="card-head"><h2>17. Indicadores macroeconómicos regionales</h2></div>
+      <div class="table-wrap"><table><thead><tr><th>País</th><th>Indicador</th><th>Valor</th><th>Estado</th></tr></thead><tbody id="macroBody"></tbody></table></div>
+    </article>
+
+    <article class="card span-6">
+      <div class="card-head"><h2>18. Asignación orientativa por escenario</h2>
+        <div class="card-actions"><button class="small" data-export-png="allocationChart">PNG</button></div>
+      </div>
+      <select id="scenarioProfile"><option value="conservador">Conservador</option><option value="moderado" selected>Moderado</option><option value="agresivo">Agresivo</option></select>
+      <canvas id="allocationChart"></canvas>
+      <div class="disclaimer" id="scenarioExplanation"></div>
+    </article>
+    <article class="card span-6">
+      <div class="card-head"><h2>Lectura rápida por mercado</h2></div>
+      <div id="countrySummary"></div>
+    </article>
+
+    <article class="card span-12">
+      <div class="card-head"><h2>Fuentes y estado de conexión</h2></div>
+      <div class="table-wrap"><table><thead><tr><th>Fuente</th><th>País</th><th>Categoría</th><th>Estado</th><th>Notas</th></tr></thead><tbody id="sourcesBody"></tbody></table></div>
+      <details class="config">
+        <summary>Configurar backend</summary>
+        <div class="config-grid">
+          <label>URL de API<input id="backendUrl" placeholder="(vacío = mismo origen, /api)"></label>
+          <label>Actualización automática (minutos)<input id="refreshMinutes" value="15"></label>
+        </div>
+      </details>
+    </article>
+  </section>
+</main>
+<footer>
+  Radar Regional de Mercados — panel operativo. Los datos marcados como "demo" son ilustrativos y no deben usarse
+  para decisiones reales hasta conectar fuentes oficiales o proveedores contratados. El análisis y las asignaciones
+  orientativas son educativos y no constituyen asesoramiento financiero personalizado ni garantía de rendimiento.
+</footer>
+
+<script src="/static/js/api.js"></script>
+<script src="/static/js/charts.js"></script>
+<script src="/static/js/map.js"></script>
+<script src="/static/js/export.js"></script>
+<script src="/static/js/main.js"></script>
+</body>
+</html>
