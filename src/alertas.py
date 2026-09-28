@@ -4,7 +4,10 @@ from pathlib import Path
 import pandas as pd
 import datetime as dt
 
-from src.financial_governance import load_financial_gate
+try:
+    from src.financial_governance import load_financial_gate
+except ModuleNotFoundError:  # ejecución: python src/alertas.py
+    from financial_governance import load_financial_gate
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_CLEAN = ROOT / "data_clean"
@@ -49,8 +52,6 @@ def generar_alertas(financial_official: bool | None = None) -> pd.DataFrame:
     ventas = load_csv("fact_ventas.csv")
     score = load_csv("score_clientes.csv")
 
-    # Finanzas solo participa con gate L4 oficial. Sin gate, se ignoran completamente
-    # saldos, vencimientos y cheques para evitar acciones sobre datos provisionales.
     if financial_official:
         if not cobros.empty and {"cliente", "vencimiento", "saldo"}.issubset(cobros.columns):
             cobros = cobros.copy()
@@ -60,9 +61,7 @@ def generar_alertas(financial_official: bool | None = None) -> pd.DataFrame:
             vencidos = cobros[(cobros["dias_vencido"] > 0) & (cobros["saldo"] > 0)]
             if not vencidos.empty:
                 top = vencidos.groupby("cliente", dropna=False).agg(
-                    saldo=("saldo", "sum"),
-                    max_dias=("dias_vencido", "max"),
-                    facturas=("saldo", "count"),
+                    saldo=("saldo", "sum"), max_dias=("dias_vencido", "max"), facturas=("saldo", "count")
                 ).sort_values("saldo", ascending=False).head(10).reset_index()
                 for _, r in top.iterrows():
                     nivel = "ROJO" if r["max_dias"] >= 30 or r["saldo"] >= 20_000_000 else "AMARILLO"
@@ -105,7 +104,6 @@ def generar_alertas(financial_official: bool | None = None) -> pd.DataFrame:
                         "Verificar débito/programación y fondeo contra banco conciliado.", r["monto"]
                     )
 
-    # Score es comercial mientras no exista un modelo financiero aprobado.
     if not score.empty and {"cliente", "score_cliente"}.issubset(score.columns):
         score = score.copy()
         score["score_cliente"] = to_num(score["score_cliente"])
@@ -118,7 +116,6 @@ def generar_alertas(financial_official: bool | None = None) -> pd.DataFrame:
                     "Revisar frecuencia/recurrencia y oportunidad comercial; no usar para bloquear crédito.", 0
                 )
 
-    # Concentración comercial se basa exclusivamente en ventas documentadas.
     if not ventas.empty and {"cliente", "total_gs"}.issubset(ventas.columns):
         ventas = ventas.copy()
         ventas["total_gs"] = to_num(ventas["total_gs"])
@@ -132,7 +129,6 @@ def generar_alertas(financial_official: bool | None = None) -> pd.DataFrame:
                     f"Representa {r['participacion']:.1f}% de las ventas detectadas.",
                     "Diversificar cartera y abrir oportunidades en clientes B y C.", r["total_gs"]
                 )
-
     return pd.DataFrame(alerts)
 
 
