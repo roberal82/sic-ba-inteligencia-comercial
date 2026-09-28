@@ -1,6 +1,7 @@
 """Configuración de seguridad para Fase 4 SIC-BA.
 
-Producción permanece bloqueada por defecto. No guardar secretos aquí.
+Producción permanece bloqueada por defecto. No guardar secretos ni IDs
+internos de infraestructura en este repositorio público.
 """
 from dataclasses import dataclass
 from enum import Enum
@@ -30,7 +31,6 @@ class Gates:
 
 
 DEFAULT_GATES = Gates()
-PRODUCTION_TARGET = "BlancoyAsociados_Sistema_Integral"
-PRODUCTION_FILE_ID = "1k_gRk7ojd6kmFdjyZ86wD2zjLvruoppGYOGHkrCvv6Q"
+PRODUCTION_TARGET = "SIC_BA_PRODUCTION_TARGET_FROM_PRIVATE_CONFIG"
 FINANCIAL_CUTOFF = "2026-09-26T23:59:00-03:00"
 RULESET_VERSION = "F4-2026.09.27-v1"
