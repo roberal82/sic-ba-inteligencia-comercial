@@ -12,6 +12,10 @@
   "sensitive_columns": {
     "HOJA_EJEMPLO_1": ["ImporteEjemplo", "EstadoEjemplo"]
   },
+  "header_rows": {
+    "HOJA_EJEMPLO_1": 3,
+    "HOJA_EJEMPLO_2": 2
+  },
   "expected_rules": [
     {
       "kind": "COLUMN_ADDED",

@@ -130,9 +130,9 @@ def run(config: EngineConfig) -> EngineRunResult:
 def _run_prepared(config: EngineConfig, output_dir: Path) -> EngineRunResult:
 
     logger.info("Cargando BASE...")
-    base_snap = load_workbook_snapshot(config.base_path, "BASE")
+    base_snap = load_workbook_snapshot(config.base_path, "BASE", config.header_rows)
     logger.info("Cargando CURRENT...")
-    current_snap = load_workbook_snapshot(config.current_path, "CURRENT")
+    current_snap = load_workbook_snapshot(config.current_path, "CURRENT", config.header_rows)
 
     sheet_diffs, sheets_summary = diff_sheets(base_snap, current_snap)
     all_diffs: list[Difference] = list(sheet_diffs)

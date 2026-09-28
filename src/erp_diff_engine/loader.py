@@ -23,9 +23,18 @@ from .security import EngineInputError, require_existing_file, sha256_file
 logger = logging.getLogger("erp_diff_engine")
 
 
-def load_workbook_snapshot(path: Path, label: str) -> WorkbookSnapshot:
+def load_workbook_snapshot(
+    path: Path, label: str, header_rows: dict[str, int] | None = None
+) -> WorkbookSnapshot:
+    """Carga un workbook.
+
+    ``header_rows`` es opcional: {hoja: fila_encabezado (1-based)}. Una hoja
+    no declarada usa fila 1 (compatibilidad hacia atrás).
+    """
+
     resolved = require_existing_file(path, label)
     digest = sha256_file(resolved)
+    header_rows = header_rows or {}
 
     try:
         wb_formulas = load_workbook(resolved, data_only=False, read_only=True)
@@ -54,7 +63,11 @@ def load_workbook_snapshot(path: Path, label: str) -> WorkbookSnapshot:
             sheets: dict[str, SheetSnapshot] = {}
             for index, name in enumerate(sheet_names):
                 sheets[name] = _load_sheet(
-                    wb_formulas[name], wb_values[name], name=name, index=index
+                    wb_formulas[name],
+                    wb_values[name],
+                    name=name,
+                    index=index,
+                    header_row=header_rows.get(name, 1),
                 )
         finally:
             wb_values.close()
@@ -65,24 +78,38 @@ def load_workbook_snapshot(path: Path, label: str) -> WorkbookSnapshot:
     return WorkbookSnapshot(path=resolved, sha256=digest, sheet_names=sheet_names, sheets=sheets)
 
 
-def _load_sheet(ws_formulas, ws_values, *, name: str, index: int) -> SheetSnapshot:
+def _load_sheet(
+    ws_formulas, ws_values, *, name: str, index: int, header_row: int = 1
+) -> SheetSnapshot:
+    if header_row < 1:
+        raise EngineInputError(
+            f"header_row inválido para la hoja '{name}': {header_row} (debe ser un entero >= 1)."
+        )
+
     max_row = ws_formulas.max_row or 0
     max_col = ws_formulas.max_column or 0
 
     if max_row == 0 or max_col == 0:
         return SheetSnapshot(name=name, index=index, headers=[], rows=[])
 
+    if header_row > max_row:
+        raise EngineInputError(
+            f"header_row configurado ({header_row}) para la hoja '{name}' supera "
+            f"el máximo de filas de la hoja ({max_row})."
+        )
+
     header_row_formulas = next(
-        ws_formulas.iter_rows(min_row=1, max_row=1, max_col=max_col), ()
+        ws_formulas.iter_rows(min_row=header_row, max_row=header_row, max_col=max_col), ()
     )
     headers = [cell.value for cell in header_row_formulas]
 
     rows: list[RowRecord] = []
-    if max_row >= 2:
-        value_rows = ws_values.iter_rows(min_row=2, max_row=max_row, max_col=max_col)
-        formula_rows = ws_formulas.iter_rows(min_row=2, max_row=max_row, max_col=max_col)
+    data_start = header_row + 1
+    if max_row >= data_start:
+        value_rows = ws_values.iter_rows(min_row=data_start, max_row=max_row, max_col=max_col)
+        formula_rows = ws_formulas.iter_rows(min_row=data_start, max_row=max_row, max_col=max_col)
         for row_number, (value_cells, formula_cells) in enumerate(
-            zip(value_rows, formula_rows), start=2
+            zip(value_rows, formula_rows), start=data_start
         ):
             values: dict[int, object] = {}
             formulas: dict[int, str] = {}

@@ -44,6 +44,34 @@ def _parse_expected_rule(raw: Any) -> ExpectedRule:
     )
 
 
+def _parse_header_rows(raw: Any) -> dict[str, int]:
+    """Parsea 'header_rows': {hoja: fila_encabezado (1-based)}.
+
+    Solo valida aquí lo que no depende del contenido del workbook (tipo entero
+    y límite inferior). El límite superior (fila de encabezado <= máximo de
+    filas de la hoja) se valida en loader.py, porque el máximo de filas solo
+    se conoce al abrir el archivo. Ver AGENTS.md: sin inferencia silenciosa de
+    encabezados, y sin hardcodear nombres de hoja en la lógica del motor.
+    """
+
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise EngineInputError("'header_rows' debe ser un objeto {hoja: fila_encabezado}.")
+    result: dict[str, int] = {}
+    for sheet, value in raw.items():
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise EngineInputError(
+                f"'header_rows.{sheet}' debe ser un entero >= 1 (recibido {value!r})."
+            )
+        if value < 1:
+            raise EngineInputError(
+                f"'header_rows.{sheet}' debe ser >= 1 (recibido {value})."
+            )
+        result[str(sheet)] = value
+    return result
+
+
 def _parse_severity_overrides(raw: Any) -> dict[DiffKind, Classification]:
     if raw is None:
         return {}
@@ -114,5 +142,6 @@ def load_config(config_path: Path | None, overrides: dict[str, Any]) -> EngineCo
             _parse_expected_rule(r) for r in (merged.get("expected_rules") or [])
         ),
         severity_overrides=_parse_severity_overrides(merged.get("severity_overrides")),
+        header_rows=_parse_header_rows(merged.get("header_rows")),
         log_file=Path(log_file) if log_file else None,
     )

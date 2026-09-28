@@ -113,6 +113,73 @@ class LoadConfigTests(unittest.TestCase):
         config = load_config(config_path, {"base_path": None, "current_path": None, "output_dir": None})
         self.assertEqual(config.severity_overrides[DiffKind.ROW_ADDED], Classification.RISK)
 
+    def test_header_rows_are_parsed(self) -> None:
+        config_path = self._write_config(
+            {
+                "base_path": "BASE.xlsx",
+                "current_path": "CURRENT.xlsx",
+                "output_dir": "out",
+                "header_rows": {"HOJA_A": 3, "HOJA_B": 2},
+            }
+        )
+        config = load_config(config_path, {"base_path": None, "current_path": None, "output_dir": None})
+        self.assertEqual(config.header_rows, {"HOJA_A": 3, "HOJA_B": 2})
+
+    def test_header_rows_default_to_empty_dict(self) -> None:
+        config = load_config(
+            None,
+            {"base_path": "BASE.xlsx", "current_path": "CURRENT.xlsx", "output_dir": "out"},
+        )
+        self.assertEqual(config.header_rows, {})
+
+    def test_header_rows_non_integer_raises_controlled_error(self) -> None:
+        config_path = self._write_config(
+            {
+                "base_path": "BASE.xlsx",
+                "current_path": "CURRENT.xlsx",
+                "output_dir": "out",
+                "header_rows": {"HOJA_A": "3"},
+            }
+        )
+        with self.assertRaises(EngineInputError):
+            load_config(config_path, {"base_path": None, "current_path": None, "output_dir": None})
+
+    def test_header_rows_zero_raises_controlled_error(self) -> None:
+        config_path = self._write_config(
+            {
+                "base_path": "BASE.xlsx",
+                "current_path": "CURRENT.xlsx",
+                "output_dir": "out",
+                "header_rows": {"HOJA_A": 0},
+            }
+        )
+        with self.assertRaises(EngineInputError):
+            load_config(config_path, {"base_path": None, "current_path": None, "output_dir": None})
+
+    def test_header_rows_negative_raises_controlled_error(self) -> None:
+        config_path = self._write_config(
+            {
+                "base_path": "BASE.xlsx",
+                "current_path": "CURRENT.xlsx",
+                "output_dir": "out",
+                "header_rows": {"HOJA_A": -1},
+            }
+        )
+        with self.assertRaises(EngineInputError):
+            load_config(config_path, {"base_path": None, "current_path": None, "output_dir": None})
+
+    def test_header_rows_not_dict_raises_controlled_error(self) -> None:
+        config_path = self._write_config(
+            {
+                "base_path": "BASE.xlsx",
+                "current_path": "CURRENT.xlsx",
+                "output_dir": "out",
+                "header_rows": ["HOJA_A"],
+            }
+        )
+        with self.assertRaises(EngineInputError):
+            load_config(config_path, {"base_path": None, "current_path": None, "output_dir": None})
+
     def test_severity_override_cannot_assign_expected(self) -> None:
         config_path = self._write_config(
             {

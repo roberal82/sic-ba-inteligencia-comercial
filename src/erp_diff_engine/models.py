@@ -162,4 +162,8 @@ class EngineConfig:
     sensitive_columns: dict[str, list[str]] = field(default_factory=dict)
     expected_rules: tuple[ExpectedRule, ...] = field(default_factory=tuple)
     severity_overrides: dict[DiffKind, Classification] = field(default_factory=dict)
+    # Fila de encabezado (1-based) por hoja. Hojas no declaradas usan fila 1
+    # (compatibilidad hacia atrás). Nunca se infiere automáticamente: ver
+    # AGENTS.md y SPRINT_001_ERP_DRIFT.md ("Fase B1-R2").
+    header_rows: dict[str, int] = field(default_factory=dict)
     log_file: Path | None = None
