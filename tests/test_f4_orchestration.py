@@ -16,6 +16,27 @@ class F4GuardrailTests(unittest.TestCase):
         self.assertEqual(result.outcome, Outcome.BLOCKED_INPUT)
         self.assertIn("NO_ASIGNABLE", result.detail)
 
+    def test_cost_job_accepts_partial_evidence_without_total_margin(self):
+        ctx = ExecutionContext(mode=Mode.DRY_RUN)
+        result = evaluate_job(
+            job("J07"),
+            ctx,
+            {"cost_evidence_ready": False, "cost_evidence_partial": True},
+        )
+        self.assertEqual(result.outcome, Outcome.PASS_WITH_EXCEPTIONS)
+        self.assertIn("evidencia parcial", result.detail.lower())
+        self.assertIn("NO_ASIGNABLE", result.detail)
+        self.assertIn("no se publica margen total", result.detail.lower())
+
+    def test_cost_job_passes_only_when_complete_scope_is_documented(self):
+        ctx = ExecutionContext(mode=Mode.DRY_RUN)
+        result = evaluate_job(
+            job("J07"),
+            ctx,
+            {"cost_evidence_ready": True, "cost_evidence_partial": True},
+        )
+        self.assertEqual(result.outcome, Outcome.PASS)
+
     def test_financial_precheck_blocks_without_l4(self):
         ctx = ExecutionContext(mode=Mode.DRY_RUN, l4_pass=False)
         result = evaluate_job(job("J09"), ctx, {})
@@ -56,6 +77,7 @@ class F4GuardrailTests(unittest.TestCase):
                 "master_resolution_ready": True,
                 "relation_candidates_ready": True,
                 "cost_evidence_ready": False,
+                "cost_evidence_partial": False,
                 "bi_ready": True,
             },
             "gates": {
@@ -69,6 +91,28 @@ class F4GuardrailTests(unittest.TestCase):
         self.assertEqual(result["overall"], "PASS_WITH_EXPECTED_BLOCKS")
         outcomes = {row["job_id"]: row["outcome"] for row in result["results"]}
         self.assertEqual(outcomes["J07"], Outcome.BLOCKED_INPUT.value)
+        self.assertEqual(outcomes["J09"], Outcome.BLOCKED_L4.value)
+        self.assertEqual(outcomes["J10"], Outcome.BLOCKED_L4.value)
+
+    def test_dry_run_preserves_partial_cost_as_exception(self):
+        manifest = {
+            "run_id": "TEST-PARTIAL-COST",
+            "inputs": {
+                "sales_ready": True,
+                "purchases_ready": True,
+                "pipeline_ready": True,
+                "documents_ready": True,
+                "master_resolution_ready": True,
+                "relation_candidates_ready": True,
+                "cost_evidence_ready": False,
+                "cost_evidence_partial": True,
+                "bi_ready": True,
+            },
+            "gates": {"l4_pass": False, "l7_go": False},
+        }
+        result = run_manifest(manifest, Mode.DRY_RUN)
+        outcomes = {row["job_id"]: row["outcome"] for row in result["results"]}
+        self.assertEqual(outcomes["J07"], Outcome.PASS_WITH_EXCEPTIONS.value)
         self.assertEqual(outcomes["J09"], Outcome.BLOCKED_L4.value)
         self.assertEqual(outcomes["J10"], Outcome.BLOCKED_L4.value)
 
