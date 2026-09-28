@@ -3,6 +3,8 @@ import pandas as pd
 import streamlit as st
 import plotly.express as px
 
+from src.pipeline_governance import apply_forecast_governance, forecast_summary
+
 ROOT = Path(__file__).resolve().parents[1]
 DATA_CLEAN = ROOT / 'data_clean'
 
@@ -20,66 +22,23 @@ if df.empty:
     st.info('Sin registros en pipeline')
     st.stop()
 
-# Compatibilidad con archivos anteriores: por defecto ningún registro es apto para forecast.
-for col, default in {
-    'monto_estimado': pd.NA,
-    'probabilidad_pct': pd.NA,
-    'monto_fuente': 'NO_DOCUMENTADO',
-    'probabilidad_fuente': 'NO_DOCUMENTADA',
-    'forecast_elegible': False,
-}.items():
-    if col not in df.columns:
-        df[col] = default
-
-df['monto_estimado_num'] = pd.to_numeric(df['monto_estimado'], errors='coerce')
-df['probabilidad_pct_num'] = pd.to_numeric(df['probabilidad_pct'], errors='coerce')
-
-if df['forecast_elegible'].dtype == bool:
-    eligible_flag = df['forecast_elegible']
-else:
-    eligible_flag = (
-        df['forecast_elegible']
-        .astype(str)
-        .str.strip()
-        .str.lower()
-        .isin({'true', '1', 'si', 'sí'})
-    )
-
-df['forecast_documentado'] = (
-    eligible_flag
-    & df['monto_estimado_num'].notna()
-    & df['probabilidad_pct_num'].notna()
-    & df['monto_fuente'].astype(str).str.upper().eq('DOCUMENTADO')
-    & df['probabilidad_fuente'].astype(str).str.upper().eq('DOCUMENTADA')
-)
-
-df['monto_ponderado_documentado'] = pd.NA
+df = apply_forecast_governance(df)
+summary = forecast_summary(df)
 mask = df['forecast_documentado']
-df.loc[mask, 'monto_ponderado_documentado'] = (
-    df.loc[mask, 'monto_estimado_num']
-    * df.loc[mask, 'probabilidad_pct_num']
-    / 100
-)
-
-monto_documentado = df.loc[mask, 'monto_estimado_num'].sum()
-ponderado_documentado = pd.to_numeric(
-    df.loc[mask, 'monto_ponderado_documentado'], errors='coerce'
-).sum()
-pendientes_evidencia = int((~mask).sum())
 
 c1, c2, c3, c4 = st.columns(4)
-c1.metric('Registros comerciales', len(df))
+c1.metric('Registros comerciales', summary['registros'])
 c2.metric(
     'Monto documentado',
-    f"Gs {monto_documentado:,.0f}" if mask.any() else 'N/D',
+    f"Gs {summary['monto_documentado']:,.0f}" if summary['forecast_documentados'] else 'N/D',
 )
 c3.metric(
     'Forecast ponderado documentado',
-    f"Gs {ponderado_documentado:,.0f}" if mask.any() else 'N/D',
+    f"Gs {summary['monto_ponderado_documentado']:,.0f}" if summary['forecast_documentados'] else 'N/D',
 )
-c4.metric('Pendientes de evidencia', pendientes_evidencia)
+c4.metric('Pendientes de evidencia', summary['pendientes_evidencia'])
 
-if not mask.all():
+if summary['pendientes_evidencia']:
     st.warning(
         'Los registros sin monto y probabilidad documentados NO integran el forecast. '
         'Las sugerencias de recompra no son cotizaciones ni ventas esperadas.'
@@ -102,14 +61,17 @@ with right:
     st.plotly_chart(px.bar(origen, x='origen', y='registros'), use_container_width=True)
 
 st.subheader('Pipeline y sugerencias')
-orden = ['forecast_documentado', 'monto_estimado_num']
 st.dataframe(
-    view.sort_values(orden, ascending=[False, False], na_position='last'),
+    view.sort_values(
+        ['forecast_documentado', 'monto_estimado_num'],
+        ascending=[False, False],
+        na_position='last',
+    ),
     use_container_width=True,
 )
 
 st.subheader('Forecast documentado')
-forecast = df[df['forecast_documentado']].copy()
+forecast = df[mask].copy()
 if forecast.empty:
     st.info('No hay registros aptos para forecast ponderado con evidencia documentada.')
 else:
