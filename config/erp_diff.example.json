@@ -1,0 +1,26 @@
+{
+  "base_path": "private-data/snapshots/EJEMPLO_BASE.xlsx",
+  "current_path": "private-data/snapshots/EJEMPLO_CURRENT.xlsx",
+  "output_dir": "private-data/outputs/erp_diff_ejemplo",
+  "primary_keys": {
+    "HOJA_EJEMPLO_1": ["ClaveEjemplo"],
+    "HOJA_EJEMPLO_2": ["ClaveEjemplo"]
+  },
+  "control_totals": {
+    "HOJA_EJEMPLO_1": ["ImporteEjemplo"]
+  },
+  "sensitive_columns": {
+    "HOJA_EJEMPLO_1": ["ImporteEjemplo", "EstadoEjemplo"]
+  },
+  "expected_rules": [
+    {
+      "kind": "COLUMN_ADDED",
+      "sheet": "HOJA_EJEMPLO_2",
+      "column": "ColumnaNuevaEjemplo",
+      "note": "Ejemplo: aprobado explícitamente por negocio antes de ejecutar el motor."
+    }
+  ],
+  "severity_overrides": {
+    "SHEET_ORDER_CHANGED": "REQUIRES_HUMAN_REVIEW"
+  }
+}
