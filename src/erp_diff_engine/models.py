@@ -166,4 +166,10 @@ class EngineConfig:
     # (compatibilidad hacia atrás). Nunca se infiere automáticamente: ver
     # AGENTS.md y SPRINT_001_ERP_DRIFT.md ("Fase B1-R2").
     header_rows: dict[str, int] = field(default_factory=dict)
+    # Primera fila de datos reales (1-based) por hoja. Opcional: hojas no
+    # declaradas usan header_row + 1 (compatibilidad hacia atrás). Permite
+    # excluir filas plantilla (p.ej. una fila con fórmula y sin ID real,
+    # ubicada entre el encabezado y los datos) sin inferencia automática
+    # (hotfix Sprint 001, DATA_START_ROWS).
+    data_start_rows: dict[str, int] = field(default_factory=dict)
     log_file: Path | None = None

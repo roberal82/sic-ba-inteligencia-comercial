@@ -38,17 +38,24 @@ logger = logging.getLogger("erp_diff_engine")
 
 
 def load_workbook_snapshot(
-    path: Path, label: str, header_rows: dict[str, int] | None = None
+    path: Path,
+    label: str,
+    header_rows: dict[str, int] | None = None,
+    data_start_rows: dict[str, int] | None = None,
 ) -> WorkbookSnapshot:
     """Carga un workbook.
 
     ``header_rows`` es opcional: {hoja: fila_encabezado (1-based)}. Una hoja
     no declarada usa fila 1 (compatibilidad hacia atrás).
+
+    ``data_start_rows`` es opcional: {hoja: primera_fila_de_datos (1-based)}.
+    Una hoja no declarada usa header_row + 1 (compatibilidad hacia atrás).
     """
 
     resolved = require_existing_file(path, label)
     digest = sha256_file(resolved)
     header_rows = header_rows or {}
+    data_start_rows = data_start_rows or {}
 
     try:
         wb_formulas = load_workbook(resolved, data_only=False, read_only=True)
@@ -82,6 +89,7 @@ def load_workbook_snapshot(
                     name=name,
                     index=index,
                     header_row=header_rows.get(name, 1),
+                    data_start_row=data_start_rows.get(name),
                 )
         finally:
             wb_values.close()
@@ -93,11 +101,22 @@ def load_workbook_snapshot(
 
 
 def _load_sheet(
-    ws_formulas, ws_values, *, name: str, index: int, header_row: int = 1
+    ws_formulas,
+    ws_values,
+    *,
+    name: str,
+    index: int,
+    header_row: int = 1,
+    data_start_row: int | None = None,
 ) -> SheetSnapshot:
     if header_row < 1:
         raise EngineInputError(
             f"header_row inválido para la hoja '{name}': {header_row} (debe ser un entero >= 1)."
+        )
+    if data_start_row is not None and data_start_row < header_row + 1:
+        raise EngineInputError(
+            f"data_start_rows.{name} ({data_start_row}) inválido: debe ser un entero "
+            f">= header_row + 1 ({header_row + 1})."
         )
 
     # Invalida la dimensión declarada (potencialmente incorrecta) de AMBAS
@@ -123,8 +142,25 @@ def _load_sheet(
     headers = [cell.value for cell in header_tuple]
     num_cols = len(headers)
 
+    data_start = data_start_row if data_start_row is not None else header_row + 1
+    if data_start_row is not None:
+        # data_start_rows fue declarado explícitamente para esta hoja: a
+        # diferencia del default (header_row + 1, donde "sin filas de datos"
+        # es un resultado legítimo), aquí el usuario afirmó que hay datos a
+        # partir de esa fila. Si esa fila no existe físicamente en el
+        # workbook, fallar cerrado en vez de devolver un snapshot vacío en
+        # silencio (ver REGLAS DATA_START_ROWS, hotfix Sprint 001).
+        probe = next(
+            ws_formulas.iter_rows(min_row=data_start, max_row=data_start), None
+        )
+        if probe is None:
+            raise EngineInputError(
+                f"data_start_rows configurado ({data_start}) para la hoja '{name}' "
+                "está fuera del workbook: la hoja no tiene contenido físico en o "
+                "después de esa fila."
+            )
+
     rows: list[RowRecord] = []
-    data_start = header_row + 1
     if num_cols > 0:
         value_rows = ws_values.iter_rows(min_row=data_start, max_col=num_cols)
         formula_rows = ws_formulas.iter_rows(min_row=data_start, max_col=num_cols)

@@ -72,6 +72,42 @@ def _parse_header_rows(raw: Any) -> dict[str, int]:
     return result
 
 
+def _parse_data_start_rows(raw: Any, header_rows: dict[str, int]) -> dict[str, int]:
+    """Parsea 'data_start_rows': {hoja: primera_fila_de_datos (1-based)}.
+
+    Opcional por hoja (AGENTS.md: sin inferencia automática de filas
+    plantilla). Si no está declarada, loader.py usa header_row + 1
+    (compatibilidad hacia atrás). Aquí se valida el límite estructural
+    (entero >= header_row + 1, usando header_rows.get(hoja, 1) como fila de
+    encabezado efectiva para esa hoja). El límite superior (fuera del
+    contenido físico real del workbook) se valida en loader.py, igual que
+    header_rows, porque el contenido real solo se conoce al abrir el
+    archivo.
+    """
+
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise EngineInputError(
+            "'data_start_rows' debe ser un objeto {hoja: fila_inicio_datos}."
+        )
+    result: dict[str, int] = {}
+    for sheet, value in raw.items():
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise EngineInputError(
+                f"'data_start_rows.{sheet}' debe ser un entero >= 1 (recibido {value!r})."
+            )
+        effective_header_row = header_rows.get(str(sheet), 1)
+        min_allowed = effective_header_row + 1
+        if value < min_allowed:
+            raise EngineInputError(
+                f"'data_start_rows.{sheet}' ({value}) debe ser >= header_row + 1 "
+                f"({min_allowed})."
+            )
+        result[str(sheet)] = value
+    return result
+
+
 def _parse_severity_overrides(raw: Any) -> dict[DiffKind, Classification]:
     if raw is None:
         return {}
@@ -129,6 +165,8 @@ def load_config(config_path: Path | None, overrides: dict[str, Any]) -> EngineCo
 
     log_file = merged.get("log_file")
 
+    header_rows = _parse_header_rows(merged.get("header_rows"))
+
     return EngineConfig(
         base_path=Path(base_path),
         current_path=Path(current_path),
@@ -142,6 +180,7 @@ def load_config(config_path: Path | None, overrides: dict[str, Any]) -> EngineCo
             _parse_expected_rule(r) for r in (merged.get("expected_rules") or [])
         ),
         severity_overrides=_parse_severity_overrides(merged.get("severity_overrides")),
-        header_rows=_parse_header_rows(merged.get("header_rows")),
+        header_rows=header_rows,
+        data_start_rows=_parse_data_start_rows(merged.get("data_start_rows"), header_rows),
         log_file=Path(log_file) if log_file else None,
     )
