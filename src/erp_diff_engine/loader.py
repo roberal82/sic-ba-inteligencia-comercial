@@ -6,6 +6,20 @@ Se abre el archivo dos veces en modo lectura (`read_only=True`):
     los cacheó al guardar, o el valor literal si la celda no es fórmula).
 
 Nunca se llama a `save()` sobre un archivo de entrada.
+
+Nota (hotfix Sprint 001, "openpyxl read_only dimensions"): en modo
+``read_only=True`` openpyxl NO calcula ``ws.max_row``/``ws.max_column`` a
+partir de las celdas reales (eso solo ocurre en modo escritura completa).
+En su lugar confía ciegamente en el atributo ``<dimension ref="..."/>``
+declarado en el XML de la hoja (ver ``ReadOnlyWorksheet._get_size``).
+Los XLSX exportados desde Google Sheets pueden declarar ese atributo de
+forma inconsistente con el contenido físico real (``A1:A1`` con cientos de
+filas reales, o ``A1:P1000`` con un puñado de filas reales). Por eso este
+loader nunca usa ``max_row``/``max_column`` para decidir si una hoja está
+vacía ni para acotar ``iter_rows()``: usa ``reset_dimensions()`` (método
+público de openpyxl, documentado explícitamente para "Remove worksheet
+dimensions if these are incorrect in the worksheet source") y procesa el
+stream físico real de filas.
 """
 
 from __future__ import annotations
@@ -86,28 +100,34 @@ def _load_sheet(
             f"header_row inválido para la hoja '{name}': {header_row} (debe ser un entero >= 1)."
         )
 
-    max_row = ws_formulas.max_row or 0
-    max_col = ws_formulas.max_column or 0
+    # Invalida la dimensión declarada (potencialmente incorrecta) de AMBAS
+    # instancias: iter_rows() vuelve a depender exclusivamente del stream
+    # físico de <row> presentes en el XML, con el ancho de cada fila
+    # calculado a partir de su última celda real (ver docstring del módulo).
+    ws_formulas.reset_dimensions()
+    ws_values.reset_dimensions()
 
-    if max_row == 0 or max_col == 0:
+    first_physical_row = next(iter(ws_formulas.rows), None)
+    if first_physical_row is None:
+        # Hoja realmente vacía (sin ninguna fila física): no hay nada que
+        # validar contra header_row, se devuelve un snapshot vacío como
+        # antes (compatibilidad con hojas auxiliares en blanco).
         return SheetSnapshot(name=name, index=index, headers=[], rows=[])
 
-    if header_row > max_row:
+    header_tuple = next(ws_formulas.iter_rows(min_row=header_row, max_row=header_row), None)
+    if header_tuple is None:
         raise EngineInputError(
-            f"header_row configurado ({header_row}) para la hoja '{name}' supera "
-            f"el máximo de filas de la hoja ({max_row})."
+            f"header_row configurado ({header_row}) para la hoja '{name}' no existe: "
+            "la hoja no tiene contenido físico en esa fila."
         )
-
-    header_row_formulas = next(
-        ws_formulas.iter_rows(min_row=header_row, max_row=header_row, max_col=max_col), ()
-    )
-    headers = [cell.value for cell in header_row_formulas]
+    headers = [cell.value for cell in header_tuple]
+    num_cols = len(headers)
 
     rows: list[RowRecord] = []
     data_start = header_row + 1
-    if max_row >= data_start:
-        value_rows = ws_values.iter_rows(min_row=data_start, max_row=max_row, max_col=max_col)
-        formula_rows = ws_formulas.iter_rows(min_row=data_start, max_row=max_row, max_col=max_col)
+    if num_cols > 0:
+        value_rows = ws_values.iter_rows(min_row=data_start, max_col=num_cols)
+        formula_rows = ws_formulas.iter_rows(min_row=data_start, max_col=num_cols)
         for row_number, (value_cells, formula_cells) in enumerate(
             zip(value_rows, formula_rows), start=data_start
         ):
