@@ -39,16 +39,24 @@ python -m unittest tests/test_f4_orchestration.py
 | J04 | Descubrimiento OC/remisiones | no inferir vínculo |
 | J05 | Resolución cliente/proveedor | exacto; fuzzy solo candidato |
 | J06 | Candidatos cotización→venta/OC | nunca auto-confirmar |
-| J07 | Candidatos costo→venta | evidencia de ítem/OC |
+| J07 | Candidatos costo→venta | evidencia de ítem/OC, completa o parcial explícita |
 | J08 | Refresh BI | no publicar métricas N/D |
 | J09 | Precheck financiero | L4 PASS |
 | J10 | Cutover package | L4 + L7 + rollback + aprobación + interlock |
+
+### J07 — niveles de evidencia de costo
+
+- `cost_evidence_ready=false` y `cost_evidence_partial=false`: `BLOCKED_INPUT`; todo costo queda `NO_ASIGNABLE`.
+- `cost_evidence_partial=true`: `PASS_WITH_EXCEPTIONS`; solo los ítems respaldados documentalmente pueden recibir costo. Los ítems restantes siguen `NO_ASIGNABLE` y no se publica margen total de la operación.
+- `cost_evidence_ready=true`: `PASS` para el alcance declarado, siempre limitado a relaciones documentadas.
+
+El estado parcial no debe convertirse en costo total por proximidad temporal, similitud de monto, proveedor habitual ni equivalencia técnica inferida.
 
 ## Guardrails
 
 1. Ningún input ausente se transforma en cero o dato confirmado.
 2. Un candidato no se promueve automáticamente a confirmado.
-3. Sin evidencia de ítem/OC, un costo queda `NO_ASIGNABLE`.
+3. Sin evidencia de ítem/OC, un costo queda `NO_ASIGNABLE`; evidencia parcial solo habilita asignación parcial documentada.
 4. Finanzas permanece bloqueada si L4 no está en PASS.
 5. Cutover permanece bloqueado si L4/L7 no están habilitados.
 6. El modo `apply` requiere además rollback real, aprobación humana e interlock explícito.
