@@ -160,6 +160,17 @@ class EngineConfig:
     primary_keys: dict[str, list[str]] = field(default_factory=dict)
     control_totals: dict[str, list[str]] = field(default_factory=dict)
     sensitive_columns: dict[str, list[str]] = field(default_factory=dict)
+    # Modo de emparejamiento de filas por hoja: "keyed" | "positional" | "multiset".
+    # Por defecto (hoja no declarada aquí) el modo sigue siendo keyed si existe
+    # `primary_keys` para esa hoja, o positional si no existe. `multiset` solo se
+    # activa si se declara explícitamente aquí (hotfix Sprint 001, MULTISET_EVENT_MATCHING:
+    # hojas tipo log/evento sin clave primaria confiable, donde filas idénticas
+    # repetidas son válidas y no son DUPLICATE_KEY).
+    row_match_modes: dict[str, str] = field(default_factory=dict)
+    # Columnas que forman la firma de comparación en modo multiset, por hoja.
+    # Requerido cuando `row_match_modes[hoja] == "multiset"`; ignorado en
+    # cualquier otro modo.
+    multiset_columns: dict[str, list[str]] = field(default_factory=dict)
     expected_rules: tuple[ExpectedRule, ...] = field(default_factory=tuple)
     severity_overrides: dict[DiffKind, Classification] = field(default_factory=dict)
     # Fila de encabezado (1-based) por hoja. Hojas no declaradas usan fila 1

@@ -26,8 +26,8 @@ from .report import (
     build_rows_csv,
     write_reports,
 )
-from .row_diff import count_nulls, diff_rows_keyed, diff_rows_positional
-from .security import prepare_output_dir, safe_output_path
+from .row_diff import count_nulls, diff_rows_keyed, diff_rows_multiset, diff_rows_positional
+from .security import EngineInputError, prepare_output_dir, safe_output_path
 from .structure_diff import diff_columns_and_headers, diff_sheets
 from .totals import diff_control_totals
 
@@ -70,8 +70,19 @@ def _diff_one_sheet(
     col_diffs, col_summary = diff_columns_and_headers(sheet_name, base_sheet, current_sheet)
     diffs.extend(col_diffs)
 
+    row_match_mode = config.row_match_modes.get(sheet_name)
     pk_headers = config.primary_keys.get(sheet_name)
-    if pk_headers:
+    if row_match_mode == "multiset":
+        multiset_headers = config.multiset_columns.get(sheet_name)
+        if not multiset_headers:
+            raise EngineInputError(
+                f"row_match_modes['{sheet_name}'] = 'multiset' requiere "
+                f"multiset_columns['{sheet_name}'] con al menos una columna."
+            )
+        row_diffs, row_summary = diff_rows_multiset(
+            sheet_name, base_sheet, current_sheet, multiset_headers
+        )
+    elif pk_headers:
         row_diffs, row_summary = diff_rows_keyed(sheet_name, base_sheet, current_sheet, pk_headers)
     else:
         row_diffs, row_summary = diff_rows_positional(sheet_name, base_sheet, current_sheet)

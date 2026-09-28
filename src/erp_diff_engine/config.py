@@ -108,6 +108,58 @@ def _parse_data_start_rows(raw: Any, header_rows: dict[str, int]) -> dict[str, i
     return result
 
 
+_VALID_ROW_MATCH_MODES = {"keyed", "positional", "multiset"}
+
+
+def _parse_row_match_modes(raw: Any) -> dict[str, str]:
+    """Parsea 'row_match_modes': {hoja: "keyed"|"positional"|"multiset"}.
+
+    Opcional por hoja. Una hoja no declarada aquí conserva el comportamiento
+    histórico (keyed si tiene primary_keys, positional si no). Solo "multiset"
+    cambia el comportamiento por defecto, y únicamente si se declara aquí de
+    forma explícita (hotfix Sprint 001, MULTISET_EVENT_MATCHING, regla #3: "no
+    hardcodear nombres empresariales en el motor" y "multiset solo se activa
+    explícitamente por configuración").
+    """
+
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise EngineInputError("'row_match_modes' debe ser un objeto {hoja: modo}.")
+    result: dict[str, str] = {}
+    for sheet, value in raw.items():
+        if not isinstance(value, str) or value not in _VALID_ROW_MATCH_MODES:
+            raise EngineInputError(
+                f"'row_match_modes.{sheet}' inválido ({value!r}); valores permitidos: "
+                f"{sorted(_VALID_ROW_MATCH_MODES)}."
+            )
+        result[str(sheet)] = value
+    return result
+
+
+def _parse_multiset_columns(
+    raw: Any, row_match_modes: dict[str, str]
+) -> dict[str, list[str]]:
+    """Parsea 'multiset_columns': {hoja: [columnas]}.
+
+    Requerida (no vacía) para toda hoja con row_match_modes[hoja] == "multiset"
+    (fail closed: configuración parcial es un error de configuración, no un
+    comportamiento inferido). Se ignora para cualquier otra hoja.
+    """
+
+    result = _normalize_str_list_map(raw, "multiset_columns")
+    for sheet, mode in row_match_modes.items():
+        if mode != "multiset":
+            continue
+        columns = result.get(sheet)
+        if not columns:
+            raise EngineInputError(
+                f"'row_match_modes.{sheet}' = 'multiset' requiere 'multiset_columns.{sheet}' "
+                "con al menos una columna."
+            )
+    return result
+
+
 def _parse_severity_overrides(raw: Any) -> dict[DiffKind, Classification]:
     if raw is None:
         return {}
@@ -166,6 +218,7 @@ def load_config(config_path: Path | None, overrides: dict[str, Any]) -> EngineCo
     log_file = merged.get("log_file")
 
     header_rows = _parse_header_rows(merged.get("header_rows"))
+    row_match_modes = _parse_row_match_modes(merged.get("row_match_modes"))
 
     return EngineConfig(
         base_path=Path(base_path),
@@ -176,6 +229,8 @@ def load_config(config_path: Path | None, overrides: dict[str, Any]) -> EngineCo
         sensitive_columns=_normalize_str_list_map(
             merged.get("sensitive_columns"), "sensitive_columns"
         ),
+        row_match_modes=row_match_modes,
+        multiset_columns=_parse_multiset_columns(merged.get("multiset_columns"), row_match_modes),
         expected_rules=tuple(
             _parse_expected_rule(r) for r in (merged.get("expected_rules") or [])
         ),

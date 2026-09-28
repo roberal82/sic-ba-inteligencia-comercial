@@ -261,6 +261,114 @@ def diff_rows_keyed(
     return diffs, summary
 
 
+def diff_rows_multiset(
+    sheet_name: str,
+    base_sheet: SheetSnapshot,
+    current_sheet: SheetSnapshot,
+    multiset_headers: list[str],
+) -> tuple[list[Difference], dict]:
+    """Compara filas como un *multiset* (bolsa) de firmas normalizadas.
+
+    Pensado para hojas tipo log/evento sin clave primaria confiable (hotfix
+    Sprint 001, MULTISET_EVENT_MATCHING): filas idénticas repetidas son
+    válidas (no DUPLICATE_KEY), el orden no importa (no genera drift), y solo
+    se reporta la diferencia *neta* de ocurrencias por firma:
+    BASE=2/CURRENT=3 de la misma firma -> +1 ROW_ADDED;
+    BASE=3/CURRENT=2 -> -1 ROW_REMOVED. `None` es un componente válido de la
+    firma. No hay inferencia semántica ni comparación celda a celda fuera de
+    las columnas declaradas: dos filas con firma distinta son, simplemente,
+    eventos distintos (nunca se emparejan como "modificación").
+    """
+
+    base_cols = _named_column_index(base_sheet)
+    current_cols = _named_column_index(current_sheet)
+    missing_base = [h for h in multiset_headers if h not in base_cols]
+    missing_current = [h for h in multiset_headers if h not in current_cols]
+    if missing_base or missing_current:
+        details: list[str] = []
+        if missing_base:
+            details.append(f"faltan en BASE: {missing_base}")
+        if missing_current:
+            details.append(f"faltan en CURRENT: {missing_current}")
+        raise EngineInputError(
+            f"multiset_columns configurado inválido para hoja '{sheet_name}' ("
+            + "; ".join(details)
+            + ")."
+        )
+
+    def _signature(row: RowRecord, cols: dict[str, int]) -> tuple:
+        return tuple(normalize_for_compare(row.values.get(cols[h])) for h in multiset_headers)
+
+    base_by_sig: dict[tuple, list[RowRecord]] = defaultdict(list)
+    for row in base_sheet.rows:
+        base_by_sig[_signature(row, base_cols)].append(row)
+
+    current_by_sig: dict[tuple, list[RowRecord]] = defaultdict(list)
+    for row in current_sheet.rows:
+        current_by_sig[_signature(row, current_cols)].append(row)
+
+    diffs: list[Difference] = []
+    rows_added = 0
+    rows_removed = 0
+
+    all_signatures = set(base_by_sig) | set(current_by_sig)
+    for signature in sorted(all_signatures, key=_stable_key):
+        base_rows = base_by_sig.get(signature, [])
+        current_rows = current_by_sig.get(signature, [])
+        delta = len(current_rows) - len(base_rows)
+        if delta > 0:
+            rows_added += delta
+            for row in current_rows[len(base_rows):]:
+                diffs.append(
+                    Difference(
+                        kind=DiffKind.ROW_ADDED,
+                        sheet=sheet_name,
+                        row_key=str(signature),
+                        location=(
+                            f"Hoja '{sheet_name}', ocurrencia agregada (firma multiset "
+                            f"{signature}, fila CURRENT {row.row_number})"
+                        ),
+                        current_value=signature,
+                        detail=(
+                            f"Ocurrencias BASE={len(base_rows)}, CURRENT={len(current_rows)} "
+                            "para esta firma (modo multiset)."
+                        ),
+                    )
+                )
+        elif delta < 0:
+            rows_removed += -delta
+            for row in base_rows[len(current_rows):]:
+                diffs.append(
+                    Difference(
+                        kind=DiffKind.ROW_REMOVED,
+                        sheet=sheet_name,
+                        row_key=str(signature),
+                        location=(
+                            f"Hoja '{sheet_name}', ocurrencia eliminada (firma multiset "
+                            f"{signature}, fila BASE {row.row_number})"
+                        ),
+                        base_value=signature,
+                        detail=(
+                            f"Ocurrencias BASE={len(base_rows)}, CURRENT={len(current_rows)} "
+                            "para esta firma (modo multiset)."
+                        ),
+                    )
+                )
+        # delta == 0: mismas ocurrencias (incluyendo >1 idénticas): sin drift,
+        # nunca DUPLICATE_KEY en modo multiset (regla #8).
+
+    summary = {
+        "mode": "multiset",
+        "primary_key": [],
+        "multiset_columns": multiset_headers,
+        "rows_added": rows_added,
+        "rows_removed": rows_removed,
+        "rows_modified": 0,
+        "row_matching_evidence": "CONFIRMED",
+    }
+    return diffs, summary
+
+
 def diff_rows_positional(
     sheet_name: str, base_sheet: SheetSnapshot, current_sheet: SheetSnapshot
 ) -> tuple[list[Difference], dict]:
