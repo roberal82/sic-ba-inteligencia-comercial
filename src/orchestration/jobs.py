@@ -92,6 +92,28 @@ def evaluate_job(
             "Cutover habilitable por gates; este runner no ejecuta escrituras externas.",
         )
 
+    if spec.job_id == "J07":
+        if bool(inputs.get("cost_evidence_ready", False)):
+            return JobResult(
+                spec.job_id,
+                spec.name,
+                Outcome.PASS,
+                "Evidencia de costo completa disponible para el alcance declarado; asignar únicamente relaciones documentadas.",
+            )
+        if bool(inputs.get("cost_evidence_partial", False)):
+            return JobResult(
+                spec.job_id,
+                spec.name,
+                Outcome.PASS_WITH_EXCEPTIONS,
+                "Existe evidencia parcial de ítem/OC: solo los ítems documentados pueden recibir costo. Los restantes quedan NO_ASIGNABLE y no se publica margen total de la operación.",
+            )
+        return JobResult(
+            spec.job_id,
+            spec.name,
+            Outcome.BLOCKED_INPUT,
+            "Input requerido no disponible: cost_evidence_ready. Sin evidencia de ítem/OC el costo debe quedar NO_ASIGNABLE.",
+        )
+
     if not _truthy_input(inputs, spec.input_key):
         detail = f"Input requerido no disponible: {spec.input_key}."
         if spec.requires_cost_evidence:
