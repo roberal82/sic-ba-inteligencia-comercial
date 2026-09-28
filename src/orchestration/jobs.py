@@ -57,6 +57,13 @@ def evaluate_job(
         )
 
     if spec.job_id == "J10":
+        if not ctx.l4_pass:
+            return JobResult(
+                spec.job_id,
+                spec.name,
+                Outcome.BLOCKED_L4,
+                "L4 permanece NO-GO; cutover productivo bloqueado antes de L7.",
+            )
         if not ctx.l7_go:
             return JobResult(
                 spec.job_id,
