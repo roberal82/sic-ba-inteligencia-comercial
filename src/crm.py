@@ -1,7 +1,10 @@
 from pathlib import Path
 import pandas as pd
 
-from src.financial_governance import load_financial_gate
+try:
+    from src.financial_governance import load_financial_gate
+except ModuleNotFoundError:  # ejecución: python src/crm.py
+    from financial_governance import load_financial_gate
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_CLEAN = ROOT / 'data_clean'
@@ -54,7 +57,6 @@ def build_crm(ventas: pd.DataFrame, cobros: pd.DataFrame, score: pd.DataFrame, f
             if not s.empty and 'score_cliente' in s.columns:
                 sc = pd.to_numeric(s['score_cliente'].iloc[0], errors='coerce')
 
-        # Priorización comercial: usa actividad/ventas, no saldo financiero.
         prioridad = 'ALTA' if venta_total > 50_000_000 else 'MEDIA' if venta_total > 10_000_000 else 'BAJA'
         proxima_accion = 'Gestionar cuenta clave' if prioridad == 'ALTA' else 'Visita comercial' if venta_total > 0 else 'Prospectar'
 
