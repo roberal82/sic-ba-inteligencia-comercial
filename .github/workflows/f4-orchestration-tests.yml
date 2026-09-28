@@ -6,6 +6,7 @@ on:
       - "src/orchestration/**"
       - "tests/test_f4_*.py"
       - "run_f4.py"
+      - "run_f4_sandbox.py"
       - "config/f4_manifest.example.json"
       - ".github/workflows/f4-orchestration-tests.yml"
   push:
@@ -15,6 +16,7 @@ on:
       - "src/orchestration/**"
       - "tests/test_f4_*.py"
       - "run_f4.py"
+      - "run_f4_sandbox.py"
       - "config/f4_manifest.example.json"
       - ".github/workflows/f4-orchestration-tests.yml"
 
@@ -41,3 +43,14 @@ jobs:
 
       - name: Run local read-only probe
         run: python -m src.orchestration.local_probe --data-clean data_clean --run-id CI-PROBE
+
+      - name: Run sandbox twice to prove idempotency
+        run: |
+          python run_f4_sandbox.py --manifest config/f4_manifest.example.json --sandbox-root sandbox/f4-ci --mode dry-run
+          python run_f4_sandbox.py --manifest config/f4_manifest.example.json --sandbox-root sandbox/f4-ci --mode dry-run
+          test "$(find sandbox/f4-ci -mindepth 1 -maxdepth 1 -type d | wc -l)" -eq 1
+
+      - name: Roll back sandbox run
+        run: |
+          python run_f4_sandbox.py --sandbox-root sandbox/f4-ci --rollback-run F4-DRYRUN-EXAMPLE
+          test ! -e sandbox/f4-ci/F4-DRYRUN-EXAMPLE
