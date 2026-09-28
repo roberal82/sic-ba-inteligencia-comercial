@@ -58,6 +58,11 @@ def _parse_severity_overrides(raw: Any) -> dict[DiffKind, Classification]:
             raise EngineInputError(
                 f"severity_overrides inválido: {key!r} -> {value!r} ({exc})."
             ) from exc
+        if classification is Classification.EXPECTED:
+            raise EngineInputError(
+                "severity_overrides no puede asignar EXPECTED; "
+                "declare una regla específica en expected_rules."
+            )
         result[kind] = classification
     return result
 

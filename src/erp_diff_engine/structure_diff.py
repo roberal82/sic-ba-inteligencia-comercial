@@ -10,6 +10,7 @@ Ver `risk_report.md` (sección "Limitaciones") para el detalle.
 
 from __future__ import annotations
 
+from collections import defaultdict
 from typing import Any
 
 from .models import Difference, DiffKind, SheetSnapshot, WorkbookSnapshot
@@ -20,6 +21,58 @@ def _header_key(value: Any) -> str | None:
         return None
     text = str(value).strip()
     return text if text else None
+
+
+def _header_quality_diffs(
+    sheet_name: str, headers: list[Any], source: str
+) -> tuple[list[Difference], dict]:
+    """Reporta encabezados vacíos o duplicados sin fingir que son un match único."""
+
+    positions_by_name: dict[str, list[int]] = defaultdict(list)
+    empty_positions: list[int] = []
+    for position, header in enumerate(headers, start=1):
+        key = _header_key(header)
+        if key is None:
+            empty_positions.append(position)
+        else:
+            positions_by_name[key].append(position)
+
+    diffs: list[Difference] = []
+    for position in empty_positions:
+        diffs.append(
+            Difference(
+                kind=DiffKind.EMPTY_HEADER,
+                sheet=sheet_name,
+                location=(
+                    f"Hoja '{sheet_name}', encabezado vacío en {source}, columna {position}"
+                ),
+                base_value=position if source == "BASE" else None,
+                current_value=position if source == "CURRENT" else None,
+                detail="Una columna sin nombre no puede emparejarse documentalmente.",
+            )
+        )
+
+    duplicates = {
+        name: positions
+        for name, positions in positions_by_name.items()
+        if len(positions) > 1
+    }
+    for name, positions in duplicates.items():
+        diffs.append(
+            Difference(
+                kind=DiffKind.DUPLICATE_HEADER,
+                sheet=sheet_name,
+                column=name,
+                location=f"Hoja '{sheet_name}', encabezado duplicado en {source}: '{name}'",
+                base_value=positions if source == "BASE" else None,
+                current_value=positions if source == "CURRENT" else None,
+                detail=(
+                    f"Columnas {positions}; el motor compara por nombre y no puede "
+                    "afirmar una correspondencia única."
+                ),
+            )
+        )
+    return diffs, {"empty_positions": empty_positions, "duplicates": duplicates}
 
 
 def diff_sheets(base: WorkbookSnapshot, current: WorkbookSnapshot) -> tuple[list[Difference], dict]:
@@ -94,6 +147,14 @@ def diff_columns_and_headers(
             current_named[k] = pos
 
     diffs: list[Difference] = []
+    base_quality_diffs, base_quality = _header_quality_diffs(
+        sheet_name, base_headers, "BASE"
+    )
+    current_quality_diffs, current_quality = _header_quality_diffs(
+        sheet_name, current_headers, "CURRENT"
+    )
+    diffs.extend(base_quality_diffs)
+    diffs.extend(current_quality_diffs)
     renamed_base_keys: set[str] = set()
     renamed_current_keys: set[str] = set()
 
@@ -163,5 +224,7 @@ def diff_columns_and_headers(
             for d in diffs
             if d.kind is DiffKind.HEADER_CHANGED
         ],
+        "header_quality_base": base_quality,
+        "header_quality_current": current_quality,
     }
     return diffs, summary

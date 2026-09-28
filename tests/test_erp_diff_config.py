@@ -113,6 +113,21 @@ class LoadConfigTests(unittest.TestCase):
         config = load_config(config_path, {"base_path": None, "current_path": None, "output_dir": None})
         self.assertEqual(config.severity_overrides[DiffKind.ROW_ADDED], Classification.RISK)
 
+    def test_severity_override_cannot_assign_expected(self) -> None:
+        config_path = self._write_config(
+            {
+                "base_path": "BASE.xlsx",
+                "current_path": "CURRENT.xlsx",
+                "output_dir": "out",
+                "severity_overrides": {"ROW_ADDED": "EXPECTED"},
+            }
+        )
+        with self.assertRaises(EngineInputError):
+            load_config(
+                config_path,
+                {"base_path": None, "current_path": None, "output_dir": None},
+            )
+
     def test_malformed_json_raises_controlled_error(self) -> None:
         config_path = self.base_dir / "bad.json"
         config_path.write_text("{no es json valido", encoding="utf-8")

@@ -27,7 +27,7 @@ from .report import (
     write_reports,
 )
 from .row_diff import count_nulls, diff_rows_keyed, diff_rows_positional
-from .security import prepare_output_dir
+from .security import prepare_output_dir, safe_output_path
 from .structure_diff import diff_columns_and_headers, diff_sheets
 from .totals import diff_control_totals
 
@@ -41,18 +41,22 @@ class EngineRunResult:
     counts_by_classification: dict[str, int] = field(default_factory=dict)
 
 
-def _configure_logging(log_file: Path | None) -> None:
-    if logger.handlers:
-        return
+def _configure_logging(log_file: Path | None) -> logging.Handler:
+    for existing in list(logger.handlers):
+        logger.removeHandler(existing)
+        existing.close()
     handler: logging.Handler
     if log_file is not None:
         log_file.parent.mkdir(parents=True, exist_ok=True)
-        handler = logging.FileHandler(log_file, encoding="utf-8")
+        handler = logging.FileHandler(log_file, mode="w", encoding="utf-8")
     else:
         handler = logging.StreamHandler()
-    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+    # Sin timestamp: mismas entradas/configuración producen también un log reproducible.
+    handler.setFormatter(logging.Formatter("%(levelname)s %(name)s: %(message)s"))
     logger.addHandler(handler)
     logger.setLevel(logging.INFO)
+    logger.propagate = False
+    return handler
 
 
 def _diff_one_sheet(
@@ -92,6 +96,7 @@ def _diff_one_sheet(
         "rows_added": row_summary["rows_added"],
         "rows_removed": row_summary["rows_removed"],
         "rows_modified": row_summary["rows_modified"],
+        "row_matching_evidence": row_summary["row_matching_evidence"],
         "nulls_base": nulls_base,
         "nulls_current": nulls_current,
         "control_totals": totals_result,
@@ -108,9 +113,21 @@ def _diff_one_sheet(
 
 
 def run(config: EngineConfig) -> EngineRunResult:
-    _configure_logging(config.log_file)
-
     output_dir = prepare_output_dir(config.output_dir, config.base_path, config.current_path)
+    log_file = (
+        safe_output_path(output_dir, str(config.log_file))
+        if config.log_file is not None
+        else None
+    )
+    handler = _configure_logging(log_file)
+    try:
+        return _run_prepared(config, output_dir)
+    finally:
+        logger.removeHandler(handler)
+        handler.close()
+
+
+def _run_prepared(config: EngineConfig, output_dir: Path) -> EngineRunResult:
 
     logger.info("Cargando BASE...")
     base_snap = load_workbook_snapshot(config.base_path, "BASE")
@@ -122,12 +139,9 @@ def run(config: EngineConfig) -> EngineRunResult:
 
     per_sheet_structure: dict[str, dict] = {}
     for sheet_name in sheets_summary["sheets_common"]:
-        try:
-            diffs, sheet_structure = _diff_one_sheet(sheet_name, base_snap, current_snap, config)
-        except Exception as exc:  # noqa: BLE001 - error controlado, no aborta el resto del run
-            logger.exception("Error procesando hoja '%s'", sheet_name)
-            sheet_structure = {"error": str(exc)}
-            diffs = []
+        diffs, sheet_structure = _diff_one_sheet(
+            sheet_name, base_snap, current_snap, config
+        )
         all_diffs.extend(diffs)
         per_sheet_structure[sheet_name] = sheet_structure
 

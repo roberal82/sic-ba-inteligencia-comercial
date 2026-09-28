@@ -32,16 +32,26 @@ STRUCTURE_KINDS = {
     DiffKind.COLUMN_ADDED,
     DiffKind.COLUMN_REMOVED,
     DiffKind.HEADER_CHANGED,
+    DiffKind.DUPLICATE_HEADER,
+    DiffKind.EMPTY_HEADER,
 }
-FORMULA_KINDS = {DiffKind.FORMULA_CHANGED, DiffKind.FORMULA_CHANGED_SAME_VALUE}
+FORMULA_KINDS = {
+    DiffKind.FORMULA_CHANGED,
+    DiffKind.FORMULA_CHANGED_SAME_VALUE,
+    DiffKind.FORMULA_CHANGED_NO_CACHED_VALUE,
+    DiffKind.FORMULA_CACHE_MISSING,
+}
 ROW_KINDS = {
     DiffKind.ROW_ADDED,
     DiffKind.ROW_REMOVED,
+    DiffKind.ROW_MATCH_AMBIGUOUS,
     DiffKind.VALUE_MODIFIED,
     DiffKind.TYPE_CHANGED,
     DiffKind.DUPLICATE_KEY,
     DiffKind.NULL_IN_KEY,
     DiffKind.CONTROL_TOTAL_MISMATCH,
+    DiffKind.CONTROL_TOTAL_COLUMN_MISSING,
+    DiffKind.CONTROL_TOTAL_INVALID_VALUE,
 }
 
 FILENAMES = {
@@ -169,6 +179,10 @@ def build_formulas_csv(classified: list[ClassifiedDifference]) -> str:
             "column",
             "base_formula",
             "current_formula",
+            "base_cached_value",
+            "current_cached_value",
+            "base_cache_status",
+            "current_cache_status",
             "classification",
             "rule_applied",
             "detail",
@@ -187,6 +201,10 @@ def build_formulas_csv(classified: list[ClassifiedDifference]) -> str:
                 _cell(d.column),
                 _cell(d.base_value),
                 _cell(d.current_value),
+                _cell(d.base_cached_value),
+                _cell(d.current_cached_value),
+                d.base_cache_status,
+                d.current_cache_status,
                 item.classification.value,
                 item.rule_applied,
                 d.detail,
@@ -275,7 +293,14 @@ DEFAULT_LIMITATIONS = [
     "una clave real declarada en 'primary_keys'.",
     "El valor calculado de una fórmula (data_only=True) depende de que el "
     "archivo Excel tenga el valor cacheado (guardado por Excel/LibreOffice). "
-    "openpyxl no calcula fórmulas.",
+    "openpyxl no calcula fórmulas. La ausencia de caché se reporta de forma "
+    "explícita y nunca se interpreta como igualdad de resultados; un caché "
+    "presente también puede estar obsoleto y el motor no certifica su frescura.",
+    "Los encabezados duplicados o vacíos se reportan como hallazgos de riesgo, "
+    "pero sus columnas no tienen una correspondencia documental única y el "
+    "contenido completo de esas columnas requiere revisión humana.",
+    "Excel/openpyxl puede serializar un float integral como entero; si el tipo "
+    "original no sobrevive a la lectura, el motor no puede reconstruirlo.",
     "Los totales de control solo se calculan para columnas declaradas "
     "explícitamente en 'control_totals'; no se infieren automáticamente.",
 ]

@@ -11,6 +11,7 @@ abajo), que la configuración puede sobrescribir explícitamente.
 from __future__ import annotations
 
 from .models import ClassifiedDifference, Classification, Difference, DiffKind, EngineConfig
+from .security import EngineInputError
 
 DEFAULT_SEVERITY: dict[DiffKind, Classification] = {
     DiffKind.SHEET_ADDED: Classification.UNDOCUMENTED,
@@ -19,15 +20,22 @@ DEFAULT_SEVERITY: dict[DiffKind, Classification] = {
     DiffKind.COLUMN_ADDED: Classification.UNDOCUMENTED,
     DiffKind.COLUMN_REMOVED: Classification.RISK,
     DiffKind.HEADER_CHANGED: Classification.RISK,
+    DiffKind.DUPLICATE_HEADER: Classification.CRITICAL,
+    DiffKind.EMPTY_HEADER: Classification.RISK,
     DiffKind.ROW_ADDED: Classification.UNDOCUMENTED,
     DiffKind.ROW_REMOVED: Classification.RISK,
+    DiffKind.ROW_MATCH_AMBIGUOUS: Classification.REQUIRES_HUMAN_REVIEW,
     DiffKind.VALUE_MODIFIED: Classification.UNDOCUMENTED,
     DiffKind.TYPE_CHANGED: Classification.RISK,
     DiffKind.FORMULA_CHANGED: Classification.RISK,
     DiffKind.FORMULA_CHANGED_SAME_VALUE: Classification.REQUIRES_HUMAN_REVIEW,
+    DiffKind.FORMULA_CHANGED_NO_CACHED_VALUE: Classification.REQUIRES_HUMAN_REVIEW,
+    DiffKind.FORMULA_CACHE_MISSING: Classification.REQUIRES_HUMAN_REVIEW,
     DiffKind.DUPLICATE_KEY: Classification.CRITICAL,
     DiffKind.NULL_IN_KEY: Classification.CRITICAL,
     DiffKind.CONTROL_TOTAL_MISMATCH: Classification.CRITICAL,
+    DiffKind.CONTROL_TOTAL_COLUMN_MISSING: Classification.CRITICAL,
+    DiffKind.CONTROL_TOTAL_INVALID_VALUE: Classification.CRITICAL,
 }
 
 
@@ -42,6 +50,10 @@ def classify_difference(diff: Difference, config: EngineConfig) -> ClassifiedDif
             )
 
     if diff.kind in config.severity_overrides:
+        if config.severity_overrides[diff.kind] is Classification.EXPECTED:
+            raise EngineInputError(
+                "severity_overrides no puede asignar EXPECTED; use expected_rules explícitas."
+            )
         return ClassifiedDifference(
             difference=diff,
             classification=config.severity_overrides[diff.kind],

@@ -25,6 +25,7 @@ from .columns import named_column_index as _named_column_index
 from .formula_diff import diff_formulas_for_pair
 from .models import Difference, DiffKind, RowRecord, SheetSnapshot
 from .normalize import normalize_for_compare, raw_type_label
+from .security import EngineInputError
 
 
 def _common_headers(base_sheet: SheetSnapshot, current_sheet: SheetSnapshot) -> list[str]:
@@ -113,6 +114,12 @@ def _row_key_tuple(row: RowRecord, cols: dict[str, int], pk_headers: list[str]) 
     return tuple(normalize_for_compare(row.values.get(cols[h])) for h in pk_headers)
 
 
+def _stable_key(value: tuple) -> tuple[str, ...]:
+    """Orden total reproducible incluso para claves compuestas de tipos mixtos."""
+
+    return tuple(f"{type(component).__name__}:{component!r}" for component in value)
+
+
 def diff_rows_keyed(
     sheet_name: str,
     base_sheet: SheetSnapshot,
@@ -123,6 +130,17 @@ def diff_rows_keyed(
     current_cols = _named_column_index(current_sheet)
     missing_base = [h for h in pk_headers if h not in base_cols]
     missing_current = [h for h in pk_headers if h not in current_cols]
+    if missing_base or missing_current:
+        details: list[str] = []
+        if missing_base:
+            details.append(f"faltan en BASE: {missing_base}")
+        if missing_current:
+            details.append(f"faltan en CURRENT: {missing_current}")
+        raise EngineInputError(
+            f"Clave primaria configurada inválida para hoja '{sheet_name}' ("
+            + "; ".join(details)
+            + ")."
+        )
 
     common_headers = _common_headers(base_sheet, current_sheet)
     diffs: list[Difference] = []
@@ -190,7 +208,7 @@ def diff_rows_keyed(
     rows_added = 0
     rows_modified = 0
 
-    for key in base_keys - current_keys:
+    for key in sorted(base_keys - current_keys, key=_stable_key):
         rows_removed += 1
         for row in base_by_key[key]:
             diffs.append(
@@ -203,7 +221,7 @@ def diff_rows_keyed(
                 )
             )
 
-    for key in current_keys - base_keys:
+    for key in sorted(current_keys - base_keys, key=_stable_key):
         rows_added += 1
         for row in current_by_key[key]:
             diffs.append(
@@ -216,7 +234,7 @@ def diff_rows_keyed(
                 )
             )
 
-    for key in base_keys & current_keys:
+    for key in sorted(base_keys & current_keys, key=_stable_key):
         base_row = base_by_key[key][0]
         current_row = current_by_key[key][0]
         pair_diffs, value_modified = _compare_pair(
@@ -234,6 +252,11 @@ def diff_rows_keyed(
         "rows_added": rows_added,
         "rows_removed": rows_removed,
         "rows_modified": rows_modified,
+        "row_matching_evidence": (
+            "REQUIRES_HUMAN_REVIEW"
+            if any(d.kind in {DiffKind.DUPLICATE_KEY, DiffKind.NULL_IN_KEY} for d in diffs)
+            else "CONFIRMED"
+        ),
     }
     return diffs, summary
 
@@ -260,7 +283,22 @@ def diff_rows_positional(
     rows_modified = 0
 
     matcher = difflib.SequenceMatcher(a=base_signatures, b=current_signatures, autojunk=False)
-    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+    opcodes = matcher.get_opcodes()
+    has_heuristic_change = any(tag != "equal" for tag, *_ in opcodes)
+    if has_heuristic_change:
+        diffs.append(
+            Difference(
+                kind=DiffKind.ROW_MATCH_AMBIGUOUS,
+                sheet=sheet_name,
+                location=f"Hoja '{sheet_name}', emparejamiento de filas sin clave primaria",
+                detail=(
+                    "SequenceMatcher produjo una alineación heurística. Las filas agregadas, "
+                    "eliminadas o modificadas resultantes son candidatas y requieren una clave "
+                    "declarada o revisión humana para confirmar correspondencia documental."
+                ),
+            )
+        )
+    for tag, i1, i2, j1, j2 in opcodes:
         if tag == "equal":
             # Los valores normalizados coinciden, pero la fórmula (o el tipo
             # crudo) puede diferir igual: se revisa el par completo (item #11).
@@ -341,6 +379,9 @@ def diff_rows_positional(
         "rows_added": rows_added,
         "rows_removed": rows_removed,
         "rows_modified": rows_modified,
+        "row_matching_evidence": (
+            "INSUFFICIENT_EVIDENCE" if has_heuristic_change else "CANDIDATE"
+        ),
     }
     return diffs, summary
 

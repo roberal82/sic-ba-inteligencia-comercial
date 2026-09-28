@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from zipfile import BadZipFile
 
 from openpyxl import load_workbook
 from openpyxl.utils.exceptions import InvalidFileException
@@ -30,13 +31,20 @@ def load_workbook_snapshot(path: Path, label: str) -> WorkbookSnapshot:
         wb_formulas = load_workbook(resolved, data_only=False, read_only=True)
     except InvalidFileException as exc:
         raise EngineInputError(f"{label} no es un archivo Excel válido: {resolved} ({exc})") from exc
-    except (OSError, KeyError, ValueError) as exc:
+    except (OSError, KeyError, ValueError, BadZipFile, EOFError) as exc:
         raise EngineInputError(f"No se pudo abrir {label} ({resolved}): {exc}") from exc
 
     try:
         try:
             wb_values = load_workbook(resolved, data_only=True, read_only=True)
-        except (InvalidFileException, OSError, KeyError, ValueError) as exc:
+        except (
+            InvalidFileException,
+            OSError,
+            KeyError,
+            ValueError,
+            BadZipFile,
+            EOFError,
+        ) as exc:
             raise EngineInputError(
                 f"No se pudo abrir {label} en modo valores ({resolved}): {exc}"
             ) from exc
