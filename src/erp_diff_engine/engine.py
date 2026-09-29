@@ -15,7 +15,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .classify import classify_all
-from .models import ClassifiedDifference, Difference, EngineConfig, WorkbookSnapshot
+from .models import (
+    ClassifiedDifference,
+    Difference,
+    EngineConfig,
+    WorkbookSnapshot,
+    validate_row_match_modes,
+)
 from .loader import load_workbook_snapshot
 from .report import (
     DEFAULT_LIMITATIONS,
@@ -134,6 +140,11 @@ def _diff_one_sheet(
 
 
 def run(config: EngineConfig) -> EngineRunResult:
+    # Fail-closed sin importar si `config` vino de `load_config` (que ya
+    # valida) o fue construido directamente en Python (Sprint 001, Hotfix 6):
+    # un `row_match_modes[hoja]` explícito y desconocido nunca debe caer
+    # silenciosamente en el fallback histórico de `_diff_one_sheet`.
+    validate_row_match_modes(config.row_match_modes)
     output_dir = prepare_output_dir(config.output_dir, config.base_path, config.current_path)
     log_file = (
         safe_output_path(output_dir, str(config.log_file))

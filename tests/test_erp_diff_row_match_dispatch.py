@@ -22,6 +22,7 @@ from pathlib import Path
 
 from tests import erp_diff_fixtures as fx
 
+from src.erp_diff_engine.config import load_config
 from src.erp_diff_engine.engine import run
 from src.erp_diff_engine.models import EngineConfig
 from src.erp_diff_engine.security import EngineInputError
@@ -128,6 +129,37 @@ class RowMatchModeDispatchTests(unittest.TestCase):
         self._run(base, current)
         structure = self._structure()
         self.assertEqual(structure["sheets"]["DATOS"]["row_diff_mode"], "positional")
+
+    # H. row_match_mode explícito y desconocido, con EngineConfig construido
+    # directamente en Python (sin pasar por load_config) -> EngineInputError
+    # en run(). Antes de este hotfix, run() caía silenciosamente al fallback
+    # histórico (`elif pk_headers: keyed else: positional`) en vez de fallar
+    # cerrado (Sprint 001, Hotfix 6).
+    def test_h_direct_engineconfig_with_unknown_mode_fails_closed_in_run(self) -> None:
+        base = {"DATOS": {"headers": ["ID", "Valor"], "rows": [[1, 10]]}}
+        current = {"DATOS": {"headers": ["ID", "Valor"], "rows": [[1, 10], [2, 20]]}}
+        with self.assertRaises(EngineInputError):
+            self._run(
+                base,
+                current,
+                row_match_modes={"DATOS": "no_existe"},
+                primary_keys={"DATOS": ["ID"]},
+            )
+
+    # I. el mismo modo desconocido, declarado vía archivo de configuración
+    # (load_config), debe seguir siendo rechazado antes de llegar a run()
+    # (regresión de Hotfix 5; ver también test_erp_diff_multiset.py).
+    def test_i_load_config_with_unknown_mode_fails_closed(self) -> None:
+        with self.assertRaises(EngineInputError):
+            load_config(
+                None,
+                {
+                    "base_path": str(self.base_dir / "BASE.xlsx"),
+                    "current_path": str(self.base_dir / "CURRENT.xlsx"),
+                    "output_dir": str(self.output_dir),
+                    "row_match_modes": {"DATOS": "no_existe"},
+                },
+            )
 
 
 if __name__ == "__main__":

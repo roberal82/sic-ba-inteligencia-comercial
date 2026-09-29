@@ -11,6 +11,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from .security import EngineInputError
+
 
 class Classification(str, Enum):
     """Estados de riesgo permitidos por AGENTS.md / SPRINT_001_ERP_DRIFT.md."""
@@ -150,6 +152,29 @@ class ExpectedRule:
         if self.row_key is not None and self.row_key != diff.row_key:
             return False
         return True
+
+
+# Valores permitidos para `EngineConfig.row_match_modes[hoja]`. Único punto de
+# verdad: tanto `config.load_config` (archivo/CLI) como `engine.run` (validación
+# runtime, para el caso de un EngineConfig construido directamente en Python)
+# validan contra este mismo conjunto (Sprint 001, Hotfix 6: fail-closed sin
+# depender de la ruta de construcción de EngineConfig).
+VALID_ROW_MATCH_MODES = frozenset({"keyed", "positional", "multiset"})
+
+
+def validate_row_match_modes(row_match_modes: dict[str, str]) -> None:
+    """Fail-closed: cualquier `row_match_modes[hoja]` explícito y desconocido
+    es un error de configuración, sin importar si `EngineConfig` vino de
+    `load_config` o fue construido directamente. `None`/no declarado no pasa
+    por aquí (se resuelve como compatibilidad histórica en el dispatch).
+    """
+
+    for sheet, mode in row_match_modes.items():
+        if mode not in VALID_ROW_MATCH_MODES:
+            raise EngineInputError(
+                f"row_match_modes['{sheet}'] inválido ({mode!r}); valores permitidos: "
+                f"{sorted(VALID_ROW_MATCH_MODES)}."
+            )
 
 
 @dataclass(frozen=True)

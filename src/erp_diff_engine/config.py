@@ -11,7 +11,13 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .models import Classification, DiffKind, EngineConfig, ExpectedRule
+from .models import (
+    Classification,
+    DiffKind,
+    EngineConfig,
+    ExpectedRule,
+    validate_row_match_modes,
+)
 from .security import EngineInputError, require_existing_file
 
 
@@ -108,9 +114,6 @@ def _parse_data_start_rows(raw: Any, header_rows: dict[str, int]) -> dict[str, i
     return result
 
 
-_VALID_ROW_MATCH_MODES = {"keyed", "positional", "multiset"}
-
-
 def _parse_row_match_modes(raw: Any) -> dict[str, str]:
     """Parsea 'row_match_modes': {hoja: "keyed"|"positional"|"multiset"}.
 
@@ -120,6 +123,10 @@ def _parse_row_match_modes(raw: Any) -> dict[str, str]:
     forma explícita (hotfix Sprint 001, MULTISET_EVENT_MATCHING, regla #3: "no
     hardcodear nombres empresariales en el motor" y "multiset solo se activa
     explícitamente por configuración").
+
+    La validación de valores permitidos está centralizada en
+    `models.validate_row_match_modes` (hotfix Sprint 001, Hotfix 6), para que
+    `load_config` y `engine.run` compartan el mismo criterio fail-closed.
     """
 
     if raw is None:
@@ -128,12 +135,12 @@ def _parse_row_match_modes(raw: Any) -> dict[str, str]:
         raise EngineInputError("'row_match_modes' debe ser un objeto {hoja: modo}.")
     result: dict[str, str] = {}
     for sheet, value in raw.items():
-        if not isinstance(value, str) or value not in _VALID_ROW_MATCH_MODES:
+        if not isinstance(value, str):
             raise EngineInputError(
-                f"'row_match_modes.{sheet}' inválido ({value!r}); valores permitidos: "
-                f"{sorted(_VALID_ROW_MATCH_MODES)}."
+                f"'row_match_modes.{sheet}' debe ser un string (recibido {value!r})."
             )
         result[str(sheet)] = value
+    validate_row_match_modes(result)
     return result
 
 
