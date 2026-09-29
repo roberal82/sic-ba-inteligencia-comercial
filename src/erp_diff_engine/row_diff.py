@@ -1,16 +1,24 @@
 """Diferencias de filas: agregadas, eliminadas, modificadas, duplicados y nulos.
 
-Dos modos de emparejamiento de filas:
+Tres modos de emparejamiento de filas, seleccionados por `row_match_modes` en
+la config (por hoja) o, si no se declara explícitamente, por compatibilidad
+histórica (ver `engine._diff_one_sheet`):
 
-- **Con clave primaria configurada** (`primary_keys` en la config, por hoja):
-  emparejamiento exacto por clave. Es el modo recomendado para hojas
-  transaccionales (ALERTAS, SOLICITUDES, etc.).
-- **Sin clave primaria**: emparejamiento posicional robusto a inserciones y
+- **keyed** (`primary_keys` en la config, por hoja): emparejamiento exacto por
+  clave. Es el modo recomendado para hojas transaccionales (ALERTAS,
+  SOLICITUDES, etc.). Si se declara explícitamente sin `primary_keys` para esa
+  hoja, es un error de configuración (fail closed).
+- **positional** (sin clave primaria, o declarado explícitamente aunque exista
+  `primary_keys`): emparejamiento posicional robusto a inserciones y
   eliminaciones vía `difflib.SequenceMatcher` sobre la firma normalizada de
   cada fila (usando únicamente las columnas cuyo encabezado existe en ambas
   hojas). Es un fallback razonable, no un sustituto de una clave real.
+- **multiset** (requiere declaración explícita + `multiset_columns`):
+  comparación como bolsa de firmas normalizadas, pensada para hojas tipo
+  log/evento sin clave confiable donde filas idénticas repetidas son válidas.
+  Ver `diff_rows_multiset`.
 
-En ambos modos, la comparación celda a celda se hace por *nombre* de
+En los tres modos, la comparación celda a celda se hace por *nombre* de
 encabezado (no por índice de columna), así que una columna reordenada no
 genera falsos "valor modificado".
 """

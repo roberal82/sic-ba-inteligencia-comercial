@@ -82,7 +82,17 @@ def _diff_one_sheet(
         row_diffs, row_summary = diff_rows_multiset(
             sheet_name, base_sheet, current_sheet, multiset_headers
         )
+    elif row_match_mode == "keyed":
+        if not pk_headers:
+            raise EngineInputError(
+                f"row_match_modes['{sheet_name}'] = 'keyed' requiere "
+                f"primary_keys['{sheet_name}'] con al menos una columna."
+            )
+        row_diffs, row_summary = diff_rows_keyed(sheet_name, base_sheet, current_sheet, pk_headers)
+    elif row_match_mode == "positional":
+        row_diffs, row_summary = diff_rows_positional(sheet_name, base_sheet, current_sheet)
     elif pk_headers:
+        # row_match_mode no declarado explícitamente: compatibilidad histórica.
         row_diffs, row_summary = diff_rows_keyed(sheet_name, base_sheet, current_sheet, pk_headers)
     else:
         row_diffs, row_summary = diff_rows_positional(sheet_name, base_sheet, current_sheet)
