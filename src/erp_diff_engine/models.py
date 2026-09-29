@@ -1,0 +1,211 @@
+"""Modelos de datos del ERP_DIFF_ENGINE.
+
+Todo el módulo trabaja exclusivamente con estructuras en memoria (snapshots,
+diferencias, clasificaciones). No conoce rutas privadas ni credenciales.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from enum import Enum
+from pathlib import Path
+from typing import Any
+
+from .security import EngineInputError
+
+
+class Classification(str, Enum):
+    """Estados de riesgo permitidos por AGENTS.md / SPRINT_001_ERP_DRIFT.md."""
+
+    EXPECTED = "EXPECTED"
+    UNDOCUMENTED = "UNDOCUMENTED"
+    RISK = "RISK"
+    CRITICAL = "CRITICAL"
+    REQUIRES_HUMAN_REVIEW = "REQUIRES_HUMAN_REVIEW"
+
+
+# Orden de severidad para ordenar reportes (mayor índice = más severo).
+CLASSIFICATION_SEVERITY: dict[Classification, int] = {
+    Classification.EXPECTED: 0,
+    Classification.UNDOCUMENTED: 1,
+    Classification.REQUIRES_HUMAN_REVIEW: 2,
+    Classification.RISK: 3,
+    Classification.CRITICAL: 4,
+}
+
+
+class DiffKind(str, Enum):
+    SHEET_ADDED = "SHEET_ADDED"
+    SHEET_REMOVED = "SHEET_REMOVED"
+    SHEET_ORDER_CHANGED = "SHEET_ORDER_CHANGED"
+    COLUMN_ADDED = "COLUMN_ADDED"
+    COLUMN_REMOVED = "COLUMN_REMOVED"
+    HEADER_CHANGED = "HEADER_CHANGED"
+    DUPLICATE_HEADER = "DUPLICATE_HEADER"
+    EMPTY_HEADER = "EMPTY_HEADER"
+    ROW_ADDED = "ROW_ADDED"
+    ROW_REMOVED = "ROW_REMOVED"
+    ROW_MATCH_AMBIGUOUS = "ROW_MATCH_AMBIGUOUS"
+    VALUE_MODIFIED = "VALUE_MODIFIED"
+    TYPE_CHANGED = "TYPE_CHANGED"
+    FORMULA_CHANGED = "FORMULA_CHANGED"
+    FORMULA_CHANGED_SAME_VALUE = "FORMULA_CHANGED_SAME_VALUE"
+    FORMULA_CHANGED_NO_CACHED_VALUE = "FORMULA_CHANGED_NO_CACHED_VALUE"
+    FORMULA_CACHE_MISSING = "FORMULA_CACHE_MISSING"
+    DUPLICATE_KEY = "DUPLICATE_KEY"
+    NULL_IN_KEY = "NULL_IN_KEY"
+    CONTROL_TOTAL_MISMATCH = "CONTROL_TOTAL_MISMATCH"
+    CONTROL_TOTAL_COLUMN_MISSING = "CONTROL_TOTAL_COLUMN_MISSING"
+    CONTROL_TOTAL_INVALID_VALUE = "CONTROL_TOTAL_INVALID_VALUE"
+
+
+@dataclass(frozen=True)
+class RowRecord:
+    """Una fila de datos (no encabezado) de una hoja."""
+
+    row_number: int  # número de fila real en la planilla (base 1, incluye encabezado)
+    values: dict[int, Any] = field(default_factory=dict)  # col_index(0-based) -> valor
+    formulas: dict[int, str] = field(default_factory=dict)  # col_index(0-based) -> fórmula
+
+
+@dataclass(frozen=True)
+class SheetSnapshot:
+    name: str
+    index: int  # posición 0-based en el workbook
+    headers: list[Any] = field(default_factory=list)
+    rows: list[RowRecord] = field(default_factory=list)
+
+    @property
+    def n_cols(self) -> int:
+        return len(self.headers)
+
+    @property
+    def n_rows(self) -> int:
+        return len(self.rows)
+
+    def header_at(self, col_index: int) -> Any:
+        if 0 <= col_index < len(self.headers):
+            return self.headers[col_index]
+        return None
+
+    def column_index(self, header_name: str) -> int | None:
+        for idx, header in enumerate(self.headers):
+            if header is not None and str(header).strip() == header_name:
+                return idx
+        return None
+
+
+@dataclass(frozen=True)
+class WorkbookSnapshot:
+    path: Path
+    sha256: str
+    sheet_names: list[str] = field(default_factory=list)
+    sheets: dict[str, SheetSnapshot] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class Difference:
+    """Una diferencia estructural o de contenido detectada entre BASE y CURRENT."""
+
+    kind: DiffKind
+    sheet: str | None
+    location: str
+    column: str | None = None
+    row_key: str | None = None
+    base_value: Any = None
+    current_value: Any = None
+    base_cached_value: Any = None
+    current_cached_value: Any = None
+    base_cache_status: str = "NOT_APPLICABLE"
+    current_cache_status: str = "NOT_APPLICABLE"
+    detail: str = ""
+
+
+@dataclass(frozen=True)
+class ClassifiedDifference:
+    difference: Difference
+    classification: Classification
+    rule_applied: str
+
+
+@dataclass(frozen=True)
+class ExpectedRule:
+    """Regla explícita de configuración para marcar una diferencia como EXPECTED.
+
+    Nunca se genera automáticamente: solo existe si el usuario la declaró en el
+    archivo de configuración. Ver AGENTS.md: "Nunca EXPECTED por inferencia automática".
+    """
+
+    kind: DiffKind
+    sheet: str | None = None
+    column: str | None = None
+    row_key: str | None = None
+    note: str = ""
+
+    def matches(self, diff: Difference) -> bool:
+        if self.kind != diff.kind:
+            return False
+        if self.sheet is not None and self.sheet != diff.sheet:
+            return False
+        if self.column is not None and self.column != diff.column:
+            return False
+        if self.row_key is not None and self.row_key != diff.row_key:
+            return False
+        return True
+
+
+# Valores permitidos para `EngineConfig.row_match_modes[hoja]`. Único punto de
+# verdad: tanto `config.load_config` (archivo/CLI) como `engine.run` (validación
+# runtime, para el caso de un EngineConfig construido directamente en Python)
+# validan contra este mismo conjunto (Sprint 001, Hotfix 6: fail-closed sin
+# depender de la ruta de construcción de EngineConfig).
+VALID_ROW_MATCH_MODES = frozenset({"keyed", "positional", "multiset"})
+
+
+def validate_row_match_modes(row_match_modes: dict[str, str]) -> None:
+    """Fail-closed: cualquier `row_match_modes[hoja]` explícito y desconocido
+    es un error de configuración, sin importar si `EngineConfig` vino de
+    `load_config` o fue construido directamente. `None`/no declarado no pasa
+    por aquí (se resuelve como compatibilidad histórica en el dispatch).
+    """
+
+    for sheet, mode in row_match_modes.items():
+        if mode not in VALID_ROW_MATCH_MODES:
+            raise EngineInputError(
+                f"row_match_modes['{sheet}'] inválido ({mode!r}); valores permitidos: "
+                f"{sorted(VALID_ROW_MATCH_MODES)}."
+            )
+
+
+@dataclass(frozen=True)
+class EngineConfig:
+    base_path: Path
+    current_path: Path
+    output_dir: Path
+    primary_keys: dict[str, list[str]] = field(default_factory=dict)
+    control_totals: dict[str, list[str]] = field(default_factory=dict)
+    sensitive_columns: dict[str, list[str]] = field(default_factory=dict)
+    # Modo de emparejamiento de filas por hoja: "keyed" | "positional" | "multiset".
+    # Por defecto (hoja no declarada aquí) el modo sigue siendo keyed si existe
+    # `primary_keys` para esa hoja, o positional si no existe. `multiset` solo se
+    # activa si se declara explícitamente aquí (hotfix Sprint 001, MULTISET_EVENT_MATCHING:
+    # hojas tipo log/evento sin clave primaria confiable, donde filas idénticas
+    # repetidas son válidas y no son DUPLICATE_KEY).
+    row_match_modes: dict[str, str] = field(default_factory=dict)
+    # Columnas que forman la firma de comparación en modo multiset, por hoja.
+    # Requerido cuando `row_match_modes[hoja] == "multiset"`; ignorado en
+    # cualquier otro modo.
+    multiset_columns: dict[str, list[str]] = field(default_factory=dict)
+    expected_rules: tuple[ExpectedRule, ...] = field(default_factory=tuple)
+    severity_overrides: dict[DiffKind, Classification] = field(default_factory=dict)
+    # Fila de encabezado (1-based) por hoja. Hojas no declaradas usan fila 1
+    # (compatibilidad hacia atrás). Nunca se infiere automáticamente: ver
+    # AGENTS.md y SPRINT_001_ERP_DRIFT.md ("Fase B1-R2").
+    header_rows: dict[str, int] = field(default_factory=dict)
+    # Primera fila de datos reales (1-based) por hoja. Opcional: hojas no
+    # declaradas usan header_row + 1 (compatibilidad hacia atrás). Permite
+    # excluir filas plantilla (p.ej. una fila con fórmula y sin ID real,
+    # ubicada entre el encabezado y los datos) sin inferencia automática
+    # (hotfix Sprint 001, DATA_START_ROWS).
+    data_start_rows: dict[str, int] = field(default_factory=dict)
+    log_file: Path | None = None

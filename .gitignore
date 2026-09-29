@@ -5,3 +5,20 @@ data_raw/*.pdf
 data_clean/*.csv
 sandbox/
 runtime/
+
+# Datos privados / empresariales - nunca versionar
+private-data/
+data_private/
+local_private/
+*.key
+*.pem
+credentials*
+secrets*
+*.p12
+*.pfx
+
+# Salidas locales del Sprint multiagente
+agent_outputs/
+local_snapshots/
+local_staging/
+local_logs/
