@@ -1,0 +1,12 @@
+{
+  "full_regression_pass": true,
+  "orchestration_ci_pass": true,
+  "drift_gate_pass": true,
+  "staging_ci_pass": true,
+  "rollback_test_pass": true,
+  "no_private_data": true,
+  "l4_pass": false,
+  "l7_go": false,
+  "rollback_real_proven": false,
+  "human_approval": false
+}
