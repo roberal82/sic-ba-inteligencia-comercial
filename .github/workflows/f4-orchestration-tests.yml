@@ -5,19 +5,26 @@ on:
     paths:
       - "src/orchestration/**"
       - "tests/test_f4_*.py"
+      - "tests/test_sprint002_*.py"
       - "run_f4.py"
       - "run_f4_sandbox.py"
+      - "run_sprint002_stage.py"
       - "config/f4_manifest.example.json"
+      - "config/sprint002_manifest.example.json"
       - ".github/workflows/f4-orchestration-tests.yml"
   push:
     branches:
       - "feature/f4-orchestration-dryrun"
+      - "sprint/002-operational-integration"
     paths:
       - "src/orchestration/**"
       - "tests/test_f4_*.py"
+      - "tests/test_sprint002_*.py"
       - "run_f4.py"
       - "run_f4_sandbox.py"
+      - "run_sprint002_stage.py"
       - "config/f4_manifest.example.json"
+      - "config/sprint002_manifest.example.json"
       - ".github/workflows/f4-orchestration-tests.yml"
 
 permissions:
@@ -35,8 +42,14 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Compile orchestration modules
+        run: python -m compileall -q src/orchestration run_f4.py run_f4_sandbox.py run_sprint002_stage.py
+
       - name: Run F4 unit tests
         run: python -m unittest discover -s tests -p 'test_f4_*.py'
+
+      - name: Run Sprint 002 unit tests
+        run: python -m unittest discover -s tests -p 'test_sprint002_*.py'
 
       - name: Run example dry-run
         run: python run_f4.py --manifest config/f4_manifest.example.json --mode dry-run --pretty

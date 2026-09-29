@@ -1,0 +1,42 @@
+{
+  "run_id": "S2-STAGE-EXAMPLE",
+  "sources": {
+    "sales": {
+      "path": "fact_ventas.csv",
+      "required_columns": ["ID_Venta"],
+      "key_fields": ["ID_Venta"],
+      "sets_input": "sales_ready",
+      "required": false
+    },
+    "purchases": {
+      "path": "fact_compras.csv",
+      "required_columns": ["ID_Compra"],
+      "key_fields": ["ID_Compra"],
+      "sets_input": "purchases_ready",
+      "required": false
+    },
+    "pipeline": {
+      "path": "pipeline_cotizaciones.csv",
+      "required_columns": ["ID_Cotizacion"],
+      "key_fields": ["ID_Cotizacion"],
+      "sets_input": "pipeline_ready",
+      "required": false
+    }
+  },
+  "inputs": {
+    "documents_ready": false,
+    "master_resolution_ready": false,
+    "relation_candidates_ready": false,
+    "cost_evidence_ready": false,
+    "cost_evidence_partial": false,
+    "bi_ready": false,
+    "purchases_incomplete_period": false,
+    "pipeline_has_conflicts": false
+  },
+  "gates": {
+    "l4_pass": false,
+    "l7_go": false,
+    "rollback_real_proven": false,
+    "human_approval": false
+  }
+}
