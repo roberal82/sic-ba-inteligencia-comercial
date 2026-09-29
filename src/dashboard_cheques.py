@@ -3,12 +3,25 @@ import pandas as pd
 import streamlit as st
 import plotly.express as px
 
+from src.financial_governance import load_financial_gate
+
 ROOT = Path(__file__).resolve().parents[1]
 DATA_CLEAN = ROOT / 'data_clean'
 
 st.set_page_config(page_title='SIC-BA Cheques', layout='wide')
 st.title('SIC-BA | Control de Cheques')
-st.caption('Vencimientos, bancos, beneficiarios y alertas de cobertura')
+st.caption('Vencimientos, bancos, beneficiarios y alertas de cobertura con gate financiero')
+
+gate = load_financial_gate(DATA_CLEAN)
+if not gate.official:
+    st.error(
+        'CHEQUES OFICIALES BLOQUEADOS — L4 NO-GO. '
+        'El archivo local puede existir como evidencia documental, pero no se publica como posición oficial. '
+        f'Motivo: {gate.reason}'
+    )
+    st.stop()
+
+st.success(f'Gate financiero habilitado | corte: {gate.cutoff}')
 
 path = DATA_CLEAN / 'fact_cheques.csv'
 if not path.exists():
@@ -31,22 +44,21 @@ hoy = pd.Timestamp.today().normalize()
 cheques['dias'] = (cheques['fecha_vencimiento'] - hoy).dt.days
 
 c1, c2, c3, c4 = st.columns(4)
-c1.metric('Total cheques', len(cheques))
-c2.metric('Monto total', f"Gs {cheques['monto'].sum():,.0f}")
-c3.metric('Vencen 7 dias', len(cheques[(cheques['dias'] >= 0) & (cheques['dias'] <= 7)]))
-c4.metric('Monto 7 dias', f"Gs {cheques[(cheques['dias'] >= 0) & (cheques['dias'] <= 7)]['monto'].sum():,.0f}")
+c1.metric('Total cheques oficiales', len(cheques))
+c2.metric('Monto oficial', f"Gs {cheques['monto'].sum():,.0f}")
+c3.metric('Vencen 7 días', len(cheques[(cheques['dias'] >= 0) & (cheques['dias'] <= 7)]))
+c4.metric('Monto 7 días', f"Gs {cheques[(cheques['dias'] >= 0) & (cheques['dias'] <= 7)]['monto'].sum():,.0f}")
 
 st.divider()
-
-rango = st.selectbox('Rango', ['Todos', 'Vencidos', 'Proximos 7 dias', 'Proximos 15 dias', 'Proximos 30 dias'])
+rango = st.selectbox('Rango', ['Todos', 'Vencidos', 'Próximos 7 días', 'Próximos 15 días', 'Próximos 30 días'])
 df = cheques.copy()
 if rango == 'Vencidos':
     df = df[df['dias'] < 0]
-elif rango == 'Proximos 7 dias':
+elif rango == 'Próximos 7 días':
     df = df[(df['dias'] >= 0) & (df['dias'] <= 7)]
-elif rango == 'Proximos 15 dias':
+elif rango == 'Próximos 15 días':
     df = df[(df['dias'] >= 0) & (df['dias'] <= 15)]
-elif rango == 'Proximos 30 dias':
+elif rango == 'Próximos 30 días':
     df = df[(df['dias'] >= 0) & (df['dias'] <= 30)]
 
 st.subheader('Cheques')
