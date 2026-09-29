@@ -1,0 +1,40 @@
+name: Financial governance tests
+
+on:
+  pull_request:
+    paths:
+      - "src/financial_governance.py"
+      - "src/profitability_governance.py"
+      - "src/dashboard_ceo.py"
+      - "src/dashboard_cheques.py"
+      - "src/crm.py"
+      - "src/score_clientes.py"
+      - "src/alertas.py"
+      - "src/rentabilidad.py"
+      - "src/dashboard_rentabilidad.py"
+      - "tests/test_financial_governance.py"
+      - ".github/workflows/financial-governance-tests.yml"
+  push:
+    branches:
+      - "fix/financial-governance-l4"
+
+permissions:
+  contents: read
+
+jobs:
+  financial-governance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install minimal dependency
+        run: python -m pip install pandas
+      - name: Run financial governance tests
+        run: python -m unittest tests/test_financial_governance.py
+      - name: Verify CLI imports stay compatible
+        run: |
+          python src/crm.py
+          python src/alertas.py
+          python src/rentabilidad.py

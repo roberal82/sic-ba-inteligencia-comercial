@@ -3,6 +3,7 @@ __pycache__/
 .env
 data_raw/*.pdf
 data_clean/*.csv
+data_clean/financial_gate.json
 sandbox/
 runtime/
 
