@@ -8,5 +8,7 @@
   "l4_pass": false,
   "l7_go": false,
   "rollback_real_proven": false,
-  "human_approval": false
+  "human_approval": false,
+  "writer_module_present": true,
+  "production_adapter_configured": false
 }

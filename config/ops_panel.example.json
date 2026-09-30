@@ -1,0 +1,30 @@
+{
+  "release_candidate": {
+    "full_regression_pass": true,
+    "orchestration_ci_pass": true,
+    "drift_gate_pass": true,
+    "staging_ci_pass": true,
+    "rollback_test_pass": true,
+    "no_private_data": true,
+    "l4_pass": false,
+    "l7_go": false,
+    "rollback_real_proven": false,
+    "human_approval": false,
+    "writer_module_present": true,
+    "production_adapter_configured": false
+  },
+  "l4_evidence": {},
+  "l7_inputs": {},
+  "cutover_extra": {
+    "snapshot_ready": false,
+    "cutover_window_authorized": false,
+    "nonfinancial_ready": true,
+    "cardinality_validated": true,
+    "smoke_nonfinancial_pass": true,
+    "uat_accepted": false,
+    "rollback_real_proven": false,
+    "human_approval": false,
+    "go_live_executed": false,
+    "coexistence_stable": false
+  }
+}
