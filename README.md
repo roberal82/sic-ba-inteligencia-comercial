@@ -66,28 +66,33 @@ sic-ba-inteligencia-comercial/
 
 ## Estado del Proyecto
 
-Fase actual:
-- Arquitectura definida
-- Base maestra en construcción
-- Extractor PDF Valurq v1.0 implementado
-- Dashboard Presidencia en diseño
+`TECHNICAL = COMPLETE`, `PRODUCTION = WAITING_FOR_EXTERNAL_EVIDENCE`. Ver el
+detalle completo y por qué en `docs/FINAL_STATUS.md`, y el mapa de módulos en
+`docs/ARCHITECTURE.md`.
 
-## Roadmap
+Sprints completados en `feature/f4-orchestration-dryrun`:
 
-### Sprint 1
-- Base Maestra
-- Extractor PDF
-- Dashboard Financiero
+- **Sprint 001** — ERP Drift Engine (`src/erp_diff_engine/`).
+- **Sprint 002** — Staging aislado, cuarentena, rollback por `run_id`
+  (`src/orchestration/`).
+- **Sprint 003** — Release Gate y regresión completa.
+- **Sprint 004** — Gobierno financiero L4 fail-closed (CRM/scoring/forecast
+  sin inferencias).
+- **Sprint 005** — Writer productivo bloqueado por defecto, gates formales
+  L4/L7, motor de cutover, observabilidad y panel operativo
+  (`src/writer/`, `src/gates/`, `src/cutover/engine.py`,
+  `src/observability/`, `run_ops_panel.py`).
 
-### Sprint 2
-- Dashboard Comercial
-- Score de Clientes
-- Flujo de Caja 30/60/90 días
+## Panel operativo
 
-### Sprint 3
-- IA Gerencial
-- Automatización completa
-- Reporte Ejecutivo Diario
+```powershell
+& "C:\BLANCO_ASOCIADOS_AI\.venv\Scripts\python.exe" run_ops_panel.py `
+  --config config\ops_panel.example.json
+```
+
+Ver `docs/OPERATIONS.md` para el resto de comandos y `docs/L4_GATE.md` /
+`docs/L7_GATE.md` / `docs/CUTOVER_RUNBOOK.md` / `docs/ROLLBACK_RUNBOOK.md`
+para cada gate.
 
 ## Autor
 
