@@ -44,22 +44,27 @@ queda en un commit pequeño y descriptivo; no hay commits squash pendientes.
 - Fase J — Testing: 266 passed, 4 subtests passed, 0 fail (ver `TEST_STATUS`).
 - Fase K — CI: agregados `production-readiness-tests.yml` y
   `security-check.yml`.
-- Fase L — Documentación: en progreso (este archivo + los listados abajo).
+- Fase L — Documentación: hecha (ARCHITECTURE, DEPLOYMENT, CUTOVER_RUNBOOK,
+  ROLLBACK_RUNBOOK, L4_GATE, L7_GATE, SECURITY, OPERATIONS, RECOVERY,
+  FINAL_STATUS, este checkpoint, y README.md actualizado).
 - Fase M — Panel de operación: hecho (`run_ops_panel.py`).
-- Fase N — Release Candidate Final: pendiente al momento de este checkpoint;
-  ver `NEXT_PHASE`.
+- Fase N — Release Candidate Final: hecho (`RELEASE_CANDIDATE_FINAL.md` en la
+  raíz del worktree). Todo lo técnicamente posible sin evidencia externa está
+  completo.
 
 ## NEXT_PHASE
 
-1. Completar el resto de `docs/` (ARCHITECTURE, DEPLOYMENT, CUTOVER_RUNBOOK,
-   ROLLBACK_RUNBOOK, L4_GATE, L7_GATE, SECURITY, OPERATIONS, RECOVERY,
-   FINAL_STATUS).
-2. Ejecutar `python -m compileall`, pytest completo, release gate, security
-   checks y `git diff --check`.
-3. Generar `RELEASE_CANDIDATE_FINAL.md` en la raíz del worktree.
-4. Si todos los tests están verdes: evaluar integrar
-   `sprint/005-production-readiness` a `feature/f4-orchestration-dryrun`
-   (NUNCA a `main`) y hacer push de ambas ramas a `origin`.
+Todo lo técnico de Sprint 005 está terminado (`TECHNICAL = COMPLETE`). Lo que
+sigue depende de decisiones/insumos que no son de este agente:
+
+1. El usuario decide si hacer `git push` de
+   `sprint/005-production-readiness` a `origin` (no se hizo automáticamente).
+2. El usuario decide si/cuándo integrar este sprint a
+   `feature/f4-orchestration-dryrun` (localmente los 266 tests están verdes;
+   nunca a `main`).
+3. Cuando llegue evidencia financiera real, completar
+   `FinancialGateEvidence` (`docs/L4_GATE.md`) y volver a evaluar L4 → L7 →
+   cutover → (eventualmente) un `ProductionAdapter` real, que no existe hoy.
 
 ## TEST_STATUS
 
