@@ -83,6 +83,49 @@ class ReleaseGateTests(unittest.TestCase):
         self.assertFalse(result.production_ready)
         self.assertFalse(result.writer_present)
 
+    def test_writer_present_without_production_adapter_still_blocks_production(self):
+        evidence = technical_pass()
+        evidence.update(
+            {
+                "l4_pass": True,
+                "l7_go": True,
+                "rollback_real_proven": True,
+                "human_approval": True,
+                "writer_module_present": True,
+            }
+        )
+        with patch.dict(os.environ, {"SIC_BA_PRODUCTION_WRITE": "ENABLED"}):
+            result = evaluate_release_candidate(evidence)
+        self.assertTrue(result.writer_present)
+        self.assertFalse(result.production_adapter_configured)
+        self.assertFalse(result.production_ready)
+        self.assertEqual(result.production_status, "GATES_READY_WRITER_PRESENT_NO_PRODUCTION_ADAPTER")
+
+    def test_production_ready_requires_writer_and_real_adapter_and_all_gates(self):
+        evidence = technical_pass()
+        evidence.update(
+            {
+                "l4_pass": True,
+                "l7_go": True,
+                "rollback_real_proven": True,
+                "human_approval": True,
+                "writer_module_present": True,
+                "production_adapter_configured": True,
+            }
+        )
+        with patch.dict(os.environ, {"SIC_BA_PRODUCTION_WRITE": "ENABLED"}):
+            result = evaluate_release_candidate(evidence)
+        self.assertTrue(result.production_ready)
+        self.assertEqual(result.production_status, "PRODUCTION_READY")
+
+    def test_writer_present_alone_without_env_interlock_stays_blocked(self):
+        evidence = technical_pass()
+        evidence.update({"writer_module_present": True, "production_adapter_configured": True})
+        with patch.dict(os.environ, {}, clear=True):
+            result = evaluate_release_candidate(evidence)
+        self.assertFalse(result.production_ready)
+        self.assertEqual(result.production_status, "BLOCKED_L4")
+
 
 if __name__ == "__main__":
     unittest.main()

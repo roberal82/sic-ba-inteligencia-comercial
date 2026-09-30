@@ -26,6 +26,7 @@ class ReleaseGateResult:
     gates_ready: bool
     failed_checks: tuple[str, ...]
     writer_present: bool = False
+    production_adapter_configured: bool = False
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -35,6 +36,7 @@ class ReleaseGateResult:
             "production_ready": self.production_ready,
             "gates_ready": self.gates_ready,
             "writer_present": self.writer_present,
+            "production_adapter_configured": self.production_adapter_configured,
             "failed_checks": list(self.failed_checks),
         }
 
@@ -42,9 +44,12 @@ class ReleaseGateResult:
 def evaluate_release_candidate(evidence: dict[str, Any]) -> ReleaseGateResult:
     """Evalúa readiness técnica sin autorizar producción.
 
-    Sprint 003 deliberadamente no contiene writer productivo. Aun con todos los
-    gates habilitados, ``production_ready`` permanece False y el estado final
-    indica que falta un adaptador de cutover explícito.
+    ``writer_present`` refleja si el módulo ``src.writer`` (Sprint 005) está
+    integrado en el evidence del caller — nunca se deriva automáticamente de
+    que los demás gates estén en verde. ``production_adapter_configured``
+    refleja si existe un adaptador real contra el ERP productivo, algo que
+    este repositorio no implementa: por lo tanto ``production_ready`` no
+    puede ser verdadero hoy sin importar cuántos gates pasen.
     """
 
     if not isinstance(evidence, dict):
@@ -58,6 +63,8 @@ def evaluate_release_candidate(evidence: dict[str, Any]) -> ReleaseGateResult:
     l7_go = bool(evidence.get("l7_go", False))
     rollback_real_proven = bool(evidence.get("rollback_real_proven", False))
     human_approval = bool(evidence.get("human_approval", False))
+    writer_present = bool(evidence.get("writer_module_present", False))
+    production_adapter_configured = bool(evidence.get("production_adapter_configured", False))
     interlock = (
         os.getenv("SIC_BA_PRODUCTION_WRITE", "").strip().upper()
         == PRODUCTION_INTERLOCK_VALUE
@@ -66,6 +73,7 @@ def evaluate_release_candidate(evidence: dict[str, Any]) -> ReleaseGateResult:
     gates_ready = all(
         [l4_pass, l7_go, rollback_real_proven, human_approval, interlock]
     )
+    production_ready = gates_ready and writer_present and production_adapter_configured
 
     if not technical_ready:
         production_status = "BLOCKED_TECHNICAL"
@@ -77,15 +85,20 @@ def evaluate_release_candidate(evidence: dict[str, Any]) -> ReleaseGateResult:
         production_status = "BLOCKED_APPROVAL_OR_ROLLBACK"
     elif not interlock:
         production_status = "BLOCKED_PROD_INTERLOCK"
-    else:
+    elif not writer_present:
         production_status = "GATES_READY_WRITER_ABSENT"
+    elif not production_adapter_configured:
+        production_status = "GATES_READY_WRITER_PRESENT_NO_PRODUCTION_ADAPTER"
+    else:
+        production_status = "PRODUCTION_READY"
 
     return ReleaseGateResult(
         technical_status=technical_status,
         production_status=production_status,
         technical_ready=technical_ready,
-        production_ready=False,
+        production_ready=production_ready,
         gates_ready=gates_ready,
-        writer_present=False,
+        writer_present=writer_present,
+        production_adapter_configured=production_adapter_configured,
         failed_checks=failed,
     )
