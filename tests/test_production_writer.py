@@ -255,5 +255,121 @@ class WriterRetryAndTimeoutTests(unittest.TestCase):
             self.assertTrue(any("timeout" in r.lower() for r in result.reasons))
 
 
+class WriterHermesHardeningTests(unittest.TestCase):
+    def _writer(self, tmp: str, adapter=None):
+        adapter = adapter or SandboxUpsertAdapter(Path(tmp) / "sandbox")
+        writer = ProductionWriter(
+            Path(tmp) / "store",
+            adapter,
+            _full_interlock(),
+            sleep_fn=lambda _seconds: None,
+        )
+        return writer, adapter
+
+    def test_concurrent_change_between_precheck_and_restore_is_not_overwritten(self):
+        class RaceBeforeRestoreAdapter(SandboxUpsertAdapter):
+            def __init__(self, root):
+                super().__init__(root)
+                self.cas_calls = 0
+
+            def compare_and_swap_restore(
+                self, target, key, expected_state, before_state
+            ):
+                self.cas_calls += 1
+                if self.cas_calls == 1:
+                    super().apply(
+                        target,
+                        key,
+                        {"nombre": "Cambio concurrente tardío"},
+                    )
+                return super().compare_and_swap_restore(
+                    target, key, expected_state, before_state
+                )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            adapter = RaceBeforeRestoreAdapter(Path(tmp) / "sandbox")
+            writer, _ = self._writer(tmp, adapter)
+            writer.execute("run-cas-race", [_op()], WriteMode.APPLY)
+
+            result = rollback_run(Path(tmp) / "store", "run-cas-race", adapter)
+
+            self.assertEqual(
+                result.status, RunStatus.REQUIRES_HUMAN_REVIEW.value
+            )
+            self.assertEqual(adapter.cas_calls, 1)
+            current = adapter.read("clientes", {"id": "C1"})
+            self.assertIsNotNone(current)
+            self.assertEqual(current["nombre"], "Cambio concurrente tardío")
+
+    def test_stage_run_cannot_be_rolled_back_or_delete_existing_state(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            adapter = SandboxUpsertAdapter(Path(tmp) / "sandbox")
+            adapter.apply("clientes", {"id": "C1"}, {"nombre": "Original"})
+            writer = ProductionWriter(
+                Path(tmp) / "store",
+                adapter,
+                _full_interlock(),
+                sleep_fn=lambda _seconds: None,
+            )
+            writer.execute("run-stage-safe", [_op()], WriteMode.STAGE)
+
+            result = rollback_run(
+                Path(tmp) / "store", "run-stage-safe", adapter
+            )
+
+            self.assertEqual(
+                result.status, RunStatus.REQUIRES_HUMAN_REVIEW.value
+            )
+            self.assertEqual(
+                adapter.read("clientes", {"id": "C1"})["nombre"], "Original"
+            )
+
+    def test_interrupted_apply_is_persisted_and_not_retried_blindly(self):
+        class CrashAfterApply(SandboxUpsertAdapter):
+            def __init__(self, root):
+                super().__init__(root)
+                self.apply_calls = 0
+
+            def apply(self, target, key, payload):
+                self.apply_calls += 1
+                result = super().apply(target, key, payload)
+                raise KeyboardInterrupt("simulated process interruption")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            adapter = CrashAfterApply(Path(tmp) / "sandbox")
+            writer, _ = self._writer(tmp, adapter)
+
+            with self.assertRaises(KeyboardInterrupt):
+                writer.execute(
+                    "run-interrupted", [_op()], WriteMode.APPLY
+                )
+
+            self.assertEqual(adapter.apply_calls, 1)
+
+            replay = writer.execute(
+                "run-interrupted", [_op()], WriteMode.APPLY
+            )
+            self.assertEqual(
+                replay.status, RunStatus.REQUIRES_HUMAN_REVIEW.value
+            )
+            self.assertEqual(adapter.apply_calls, 1)
+            self.assertEqual(
+                replay.operations[0].status,
+                RunStatus.APPLY_IN_PROGRESS.value,
+            )
+
+            rollback = rollback_run(
+                Path(tmp) / "store", "run-interrupted", adapter
+            )
+            self.assertEqual(
+                rollback.status, RunStatus.REQUIRES_HUMAN_REVIEW.value
+            )
+            # El estado posiblemente escrito antes del crash no se pisa a ciegas.
+            self.assertEqual(
+                adapter.read("clientes", {"id": "C1"})["nombre"],
+                "Cliente Uno",
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
