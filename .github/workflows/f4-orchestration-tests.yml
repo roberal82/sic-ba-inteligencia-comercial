@@ -1,0 +1,69 @@
+name: F4 orchestration tests
+
+on:
+  pull_request:
+    paths:
+      - "src/orchestration/**"
+      - "tests/test_f4_*.py"
+      - "tests/test_sprint002_*.py"
+      - "run_f4.py"
+      - "run_f4_sandbox.py"
+      - "run_sprint002_stage.py"
+      - "config/f4_manifest.example.json"
+      - "config/sprint002_manifest.example.json"
+      - ".github/workflows/f4-orchestration-tests.yml"
+  push:
+    branches:
+      - "feature/f4-orchestration-dryrun"
+      - "sprint/002-operational-integration"
+    paths:
+      - "src/orchestration/**"
+      - "tests/test_f4_*.py"
+      - "tests/test_sprint002_*.py"
+      - "run_f4.py"
+      - "run_f4_sandbox.py"
+      - "run_sprint002_stage.py"
+      - "config/f4_manifest.example.json"
+      - "config/sprint002_manifest.example.json"
+      - ".github/workflows/f4-orchestration-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Compile orchestration modules
+        run: python -m compileall -q src/orchestration run_f4.py run_f4_sandbox.py run_sprint002_stage.py
+
+      - name: Run F4 unit tests
+        run: python -m unittest discover -s tests -p 'test_f4_*.py'
+
+      - name: Run Sprint 002 unit tests
+        run: python -m unittest discover -s tests -p 'test_sprint002_*.py'
+
+      - name: Run example dry-run
+        run: python run_f4.py --manifest config/f4_manifest.example.json --mode dry-run --pretty
+
+      - name: Run local read-only probe
+        run: python -m src.orchestration.local_probe --data-clean data_clean --run-id CI-PROBE
+
+      - name: Run sandbox twice to prove idempotency
+        run: |
+          python run_f4_sandbox.py --manifest config/f4_manifest.example.json --sandbox-root sandbox/f4-ci --mode dry-run
+          python run_f4_sandbox.py --manifest config/f4_manifest.example.json --sandbox-root sandbox/f4-ci --mode dry-run
+          test "$(find sandbox/f4-ci -mindepth 1 -maxdepth 1 -type d | wc -l)" -eq 1
+
+      - name: Roll back sandbox run
+        run: |
+          python run_f4_sandbox.py --sandbox-root sandbox/f4-ci --rollback-run F4-DRYRUN-EXAMPLE
+          test ! -e sandbox/f4-ci/F4-DRYRUN-EXAMPLE

@@ -1,0 +1,22 @@
+{
+  "run_id": "F4-DRYRUN-EXAMPLE",
+  "inputs": {
+    "sales_ready": true,
+    "purchases_ready": true,
+    "purchases_incomplete_period": true,
+    "pipeline_ready": true,
+    "pipeline_has_conflicts": true,
+    "documents_ready": true,
+    "master_resolution_ready": true,
+    "relation_candidates_ready": true,
+    "cost_evidence_ready": false,
+    "cost_evidence_partial": false,
+    "bi_ready": true
+  },
+  "gates": {
+    "l4_pass": false,
+    "l7_go": false,
+    "rollback_real_proven": false,
+    "human_approval": false
+  }
+}

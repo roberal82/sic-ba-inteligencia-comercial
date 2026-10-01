@@ -1,0 +1,64 @@
+name: Security check
+
+on:
+  pull_request:
+    paths:
+      - "src/**"
+      - "run_*.py"
+      - "tests/test_erp_diff_security.py"
+      - ".github/workflows/security-check.yml"
+  push:
+    branches:
+      - "sprint/005-production-readiness"
+      - "feature/f4-orchestration-dryrun"
+
+permissions:
+  contents: read
+
+jobs:
+  static-security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run ERP diff engine security tests
+        run: python -m unittest tests.test_erp_diff_security
+
+      - name: Scan for dangerous patterns (shell=True, pickle, eval/exec, os.system, yaml.load)
+        shell: bash
+        run: |
+          set -euo pipefail
+          hits="$(grep -rnE 'shell=True|pickle\.load|\byaml\.load\(|os\.system\(|\beval\(|\bexec\(' \
+            --include='*.py' src run_*.py 2>/dev/null || true)"
+          if [ -n "$hits" ]; then
+            echo "Patrones peligrosos detectados:"
+            echo "$hits"
+            exit 1
+          fi
+
+      - name: Scan for hardcoded secret-like assignments
+        shell: bash
+        run: |
+          set -euo pipefail
+          hits="$(grep -rniE '(password|api_key|secret|token)\s*=\s*[\"'"'"'][^\"'"'"']+[\"'"'"']' \
+            --include='*.py' src run_*.py 2>/dev/null || true)"
+          if [ -n "$hits" ]; then
+            echo "Posibles secretos hardcodeados:"
+            echo "$hits"
+            exit 1
+          fi
+
+      - name: Verify no private payloads are tracked
+        shell: bash
+        run: |
+          set -euo pipefail
+          bad="$(git ls-files | grep -Ei '(^|/)private-data/|\.xlsx$|\.xls$|\.p12$|\.pfx$|(^|/)\.env$' || true)"
+          if [ -n "$bad" ]; then
+            echo "Tracked private/binary payloads detected:"
+            echo "$bad"
+            exit 1
+          fi

@@ -1,0 +1,40 @@
+name: F5 cutover simulation tests
+
+on:
+  pull_request:
+    paths:
+      - "src/cutover/**"
+      - "tests/test_f5_*.py"
+      - "run_f5.py"
+      - "config/f5_cutover.example.json"
+      - ".github/workflows/f5-cutover-tests.yml"
+  push:
+    branches:
+      - "feature/f5-cutover-dryrun"
+    paths:
+      - "src/cutover/**"
+      - "tests/test_f5_*.py"
+      - "run_f5.py"
+      - "config/f5_cutover.example.json"
+      - ".github/workflows/f5-cutover-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  cutover-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run F5 unit tests
+        run: python -m unittest discover -s tests -p 'test_f5_*.py'
+
+      - name: Run current-state cutover dry-run
+        run: python run_f5.py --manifest config/f5_cutover.example.json --pretty

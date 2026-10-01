@@ -1,0 +1,60 @@
+name: Production readiness tests
+
+on:
+  pull_request:
+    paths:
+      - "src/gates/**"
+      - "src/writer/**"
+      - "src/cutover/**"
+      - "src/observability/**"
+      - "src/ops_panel.py"
+      - "src/orchestration/release_gate.py"
+      - "run_ops_panel.py"
+      - "run_release_gate.py"
+      - "tests/test_gates_l4_l7.py"
+      - "tests/test_production_writer.py"
+      - "tests/test_cutover_engine.py"
+      - "tests/test_observability_log.py"
+      - "tests/test_ops_panel.py"
+      - "tests/test_release_gate.py"
+      - "config/ops_panel.example.json"
+      - "config/release_candidate.example.json"
+      - ".github/workflows/production-readiness-tests.yml"
+  push:
+    branches:
+      - "sprint/005-production-readiness"
+      - "feature/f4-orchestration-dryrun"
+
+permissions:
+  contents: read
+
+jobs:
+  gates-writer-cutover:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Compile production-readiness modules
+        run: |
+          python -m compileall -q src/gates src/writer src/cutover src/observability src/ops_panel.py
+          python -m py_compile run_ops_panel.py run_release_gate.py
+
+      - name: Run gates, writer, rollback, cutover engine and observability tests
+        run: |
+          python -m unittest \
+            tests.test_gates_l4_l7 \
+            tests.test_production_writer \
+            tests.test_cutover_engine \
+            tests.test_observability_log \
+            tests.test_ops_panel \
+            tests.test_release_gate
+
+      - name: Render the operational status panel (read-only, must never touch production)
+        run: python run_ops_panel.py --config config/ops_panel.example.json
+
+      - name: Evaluate release gate example (writer present, no real production adapter)
+        run: python run_release_gate.py --evidence config/release_candidate.example.json --pretty

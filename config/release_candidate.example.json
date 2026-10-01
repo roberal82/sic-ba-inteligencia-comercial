@@ -1,0 +1,33 @@
+{
+  "full_regression_pass": true,
+  "orchestration_ci_pass": true,
+  "drift_gate_pass": true,
+  "staging_ci_pass": true,
+  "rollback_test_pass": true,
+  "no_private_data": true,
+  "expected_financial_cutoff": "2026-09-26T23:59:00-03:00",
+  "l4_evidence": {
+    "cutoff": "2026-09-26T23:59:00-03:00",
+    "cxc_status": "INSUFFICIENT_EVIDENCE",
+    "cxp_status": "INSUFFICIENT_EVIDENCE",
+    "checks_status": "INSUFFICIENT_EVIDENCE",
+    "bank_status": "INSUFFICIENT_EVIDENCE",
+    "nominal_reconciliation_status": "INSUFFICIENT_EVIDENCE",
+    "approved_by": "",
+    "approval_timestamp": "",
+    "evidence_refs": [],
+    "source_hashes": {}
+  },
+  "l7_inputs": {
+    "integrity_pass": false,
+    "rollback_pass": false,
+    "smoke_pass": false,
+    "uat_pass": false,
+    "manifest_complete": false,
+    "human_approval": false,
+    "approved_by": "",
+    "approval_timestamp": ""
+  },
+  "writer_module_present": true,
+  "production_adapter_configured": false
+}
