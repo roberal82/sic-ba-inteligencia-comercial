@@ -14,6 +14,7 @@ class WriteMode(str, Enum):
 
 class RunStatus(str, Enum):
     STARTED = "STARTED"
+    APPLY_IN_PROGRESS = "APPLY_IN_PROGRESS"
     SIMULATED = "SIMULATED"
     STAGED = "STAGED"
     SUCCESS = "SUCCESS"

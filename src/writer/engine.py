@@ -1,12 +1,9 @@
-"""Motor del writer productivo (Fase C).
+"""Motor del writer productivo.
 
-DEFAULT = DISABLED: ``APPLY`` solo procede si ``WriterInterlock.apply_authorized``
-es verdadero (L4 PASS + L7 GO + rollback real probado + aprobación humana +
-ventana de cutover autorizada + snapshot listo + variable de entorno explícita).
-``DRY_RUN`` nunca toca el adaptador. ``STAGE`` persiste el manifest localmente sin
-llamar al adaptador. Solo ``APPLY`` autorizado invoca operaciones reales, y lo
-hace con batch limit, timeout, reintentos acotados, checksum antes/después,
-detección de escritura parcial y metadata de rollback.
+APPLY permanece fail-closed. Antes de invocar al adaptador se persiste una
+operación APPLY_IN_PROGRESS. Si el proceso cae en una zona donde el resultado
+de la escritura es desconocido, el mismo run_id no se reintenta a ciegas:
+queda en REQUIRES_HUMAN_REVIEW y debe reconciliarse/rollbackearse.
 """
 
 from __future__ import annotations
@@ -16,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Mapping, Sequence
 
-from ..orchestration.stage_store import canonical_json, sha256_json
+from ..orchestration.stage_store import sha256_json
 from .adapters import ProductionAdapter, WriterPermanentError, WriterTransientError
 from .models import OperationRecord, OperationSpec, RunResult, RunStatus, WriteMode, WriterInterlock
 from .store import WriterRunConflict, WriterRunStore
@@ -68,7 +65,12 @@ class ProductionWriter:
                 "run_id": run_id,
                 "mode": mode.value,
                 "operations": [
-                    {"op_id": op.op_id, "target": op.target, "key": dict(op.key), "payload": dict(op.payload)}
+                    {
+                        "op_id": op.op_id,
+                        "target": op.target,
+                        "key": dict(op.key),
+                        "payload": dict(op.payload),
+                    }
                     for op in operations
                 ],
             }
@@ -88,10 +90,43 @@ class ProductionWriter:
             cached = store.read_result(run_id)
             if cached is not None:
                 result = RunResult.from_dict(cached)
-                store.append_audit(run_id, {"event": "RUN_REPLAYED_IDEMPOTENT", "status": result.status})
+                store.append_audit(
+                    run_id,
+                    {"event": "RUN_REPLAYED_IDEMPOTENT", "status": result.status},
+                )
                 return result
 
-        store.append_audit(run_id, {"event": "RUN_STARTED", "mode": mode.value, "operation_count": len(operations)})
+            if mode is WriteMode.APPLY:
+                persisted = tuple(store.read_operations(run_id))
+                result = RunResult(
+                    run_id=run_id,
+                    mode=WriteMode.APPLY.value,
+                    status=RunStatus.REQUIRES_HUMAN_REVIEW.value,
+                    created=False,
+                    operations=persisted,
+                    reasons=(
+                        "Run APPLY incompleto sin resultado final; no se reintenta una escritura de resultado desconocido.",
+                    ),
+                )
+                store.set_status(run_id, RunStatus.REQUIRES_HUMAN_REVIEW.value)
+                store.write_result(run_id, result.as_dict())
+                store.append_audit(
+                    run_id,
+                    {
+                        "event": "RUN_REPLAY_BLOCKED_INCOMPLETE_APPLY",
+                        "persisted_operations": len(persisted),
+                    },
+                )
+                return result
+
+        store.append_audit(
+            run_id,
+            {
+                "event": "RUN_STARTED",
+                "mode": mode.value,
+                "operation_count": len(operations),
+            },
+        )
 
         if mode is WriteMode.DRY_RUN:
             return self._run_dry(run_id, operations, store)
@@ -99,7 +134,9 @@ class ProductionWriter:
             return self._run_stage(run_id, operations, store)
         return self._run_apply(run_id, operations, store)
 
-    def _run_dry(self, run_id: str, operations: Sequence[OperationSpec], store: WriterRunStore) -> RunResult:
+    def _run_dry(
+        self, run_id: str, operations: Sequence[OperationSpec], store: WriterRunStore
+    ) -> RunResult:
         records = tuple(
             OperationRecord(
                 op_id=op.op_id,
@@ -115,13 +152,21 @@ class ProductionWriter:
             )
             for op in operations
         )
-        result = RunResult(run_id=run_id, mode=WriteMode.DRY_RUN.value, status=RunStatus.SIMULATED.value, created=True, operations=records)
+        result = RunResult(
+            run_id=run_id,
+            mode=WriteMode.DRY_RUN.value,
+            status=RunStatus.SIMULATED.value,
+            created=True,
+            operations=records,
+        )
         store.set_status(run_id, RunStatus.SIMULATED.value)
         store.write_result(run_id, result.as_dict())
         store.append_audit(run_id, {"event": "RUN_COMPLETED", "status": result.status})
         return result
 
-    def _run_stage(self, run_id: str, operations: Sequence[OperationSpec], store: WriterRunStore) -> RunResult:
+    def _run_stage(
+        self, run_id: str, operations: Sequence[OperationSpec], store: WriterRunStore
+    ) -> RunResult:
         records = tuple(
             OperationRecord(
                 op_id=op.op_id,
@@ -139,19 +184,35 @@ class ProductionWriter:
         )
         for record in records:
             store.record_operation(run_id, record)
-        result = RunResult(run_id=run_id, mode=WriteMode.STAGE.value, status=RunStatus.STAGED.value, created=True, operations=records)
+        result = RunResult(
+            run_id=run_id,
+            mode=WriteMode.STAGE.value,
+            status=RunStatus.STAGED.value,
+            created=True,
+            operations=records,
+        )
         store.set_status(run_id, RunStatus.STAGED.value)
         store.write_result(run_id, result.as_dict())
         store.append_audit(run_id, {"event": "RUN_COMPLETED", "status": result.status})
         return result
 
-    def _run_apply(self, run_id: str, operations: Sequence[OperationSpec], store: WriterRunStore) -> RunResult:
+    def _run_apply(
+        self, run_id: str, operations: Sequence[OperationSpec], store: WriterRunStore
+    ) -> RunResult:
         if not self.interlock.apply_authorized:
             reasons = self.interlock.blocking_reasons
-            result = RunResult(run_id=run_id, mode=WriteMode.APPLY.value, status=RunStatus.BLOCKED.value, created=True, reasons=reasons)
+            result = RunResult(
+                run_id=run_id,
+                mode=WriteMode.APPLY.value,
+                status=RunStatus.BLOCKED.value,
+                created=True,
+                reasons=reasons,
+            )
             store.set_status(run_id, RunStatus.BLOCKED.value)
             store.write_result(run_id, result.as_dict())
-            store.append_audit(run_id, {"event": "RUN_BLOCKED", "reasons": list(reasons)})
+            store.append_audit(
+                run_id, {"event": "RUN_BLOCKED", "reasons": list(reasons)}
+            )
             return result
 
         records: list[OperationRecord] = []
@@ -162,6 +223,33 @@ class ProductionWriter:
                 return self._finish_partial(run_id, store, records, str(exc))
 
             before_fp = _fingerprint(before_state)
+            pending = OperationRecord(
+                op_id=op.op_id,
+                target=op.target,
+                key=dict(op.key),
+                payload_sha256=sha256_json(op.payload),
+                before_state=before_state,
+                before_fingerprint=before_fp,
+                after_state=None,
+                after_fingerprint=None,
+                status=RunStatus.APPLY_IN_PROGRESS.value,
+                attempts=0,
+            )
+            store.record_operation(run_id, pending)
+            store.set_status(
+                run_id,
+                RunStatus.APPLY_IN_PROGRESS.value,
+                active_op_id=op.op_id,
+            )
+            store.append_audit(
+                run_id,
+                {
+                    "event": "OPERATION_APPLY_IN_PROGRESS",
+                    "op_id": op.op_id,
+                    "target": op.target,
+                },
+            )
+
             try:
                 after_state, attempts = self._apply_with_retry(op)
             except (WriterPermanentError, WriterTimeoutError) as exc:
@@ -182,18 +270,33 @@ class ProductionWriter:
             store.record_operation(run_id, record)
             store.append_audit(
                 run_id,
-                {"event": "OPERATION_APPLIED", "op_id": op.op_id, "target": op.target, "attempts": attempts},
+                {
+                    "event": "OPERATION_APPLIED",
+                    "op_id": op.op_id,
+                    "target": op.target,
+                    "attempts": attempts,
+                },
             )
             records.append(record)
 
-        result = RunResult(run_id=run_id, mode=WriteMode.APPLY.value, status=RunStatus.SUCCESS.value, created=True, operations=tuple(records))
-        store.set_status(run_id, RunStatus.SUCCESS.value)
+        result = RunResult(
+            run_id=run_id,
+            mode=WriteMode.APPLY.value,
+            status=RunStatus.SUCCESS.value,
+            created=True,
+            operations=tuple(records),
+        )
+        store.set_status(run_id, RunStatus.SUCCESS.value, active_op_id=None)
         store.write_result(run_id, result.as_dict())
         store.append_audit(run_id, {"event": "RUN_COMPLETED", "status": result.status})
         return result
 
     def _finish_partial(
-        self, run_id: str, store: WriterRunStore, records: list[OperationRecord], error: str
+        self,
+        run_id: str,
+        store: WriterRunStore,
+        records: list[OperationRecord],
+        error: str,
     ) -> RunResult:
         status = RunStatus.PARTIAL.value if records else RunStatus.FAILED.value
         result = RunResult(
@@ -208,7 +311,12 @@ class ProductionWriter:
         store.write_result(run_id, result.as_dict())
         store.append_audit(
             run_id,
-            {"event": "RUN_PARTIAL_FAILURE", "status": status, "error": error, "completed_operations": len(records)},
+            {
+                "event": "RUN_PARTIAL_FAILURE",
+                "status": status,
+                "error": error,
+                "completed_operations": len(records),
+            },
         )
         return result
 
@@ -224,14 +332,18 @@ class ProductionWriter:
                 if attempts <= self.max_retries:
                     self.sleep_fn(min(2 ** attempts, 10))
                     continue
-                raise WriterPermanentError(f"Lectura falló tras {attempts} intentos: {exc}") from exc
+                raise WriterPermanentError(
+                    f"Lectura falló tras {attempts} intentos: {exc}"
+                ) from exc
             except WriterPermanentError:
                 raise
-            except Exception as exc:  # cualquier otro error del adaptador es permanente
+            except Exception as exc:
                 raise WriterPermanentError(f"Lectura falló: {exc}") from exc
         raise WriterPermanentError(str(last_exc))
 
-    def _apply_with_retry(self, op: OperationSpec) -> tuple[Mapping[str, object], int]:
+    def _apply_with_retry(
+        self, op: OperationSpec
+    ) -> tuple[Mapping[str, object], int]:
         attempts = 0
         last_exc: Exception | None = None
         while attempts <= self.max_retries:
@@ -249,8 +361,10 @@ class ProductionWriter:
                 ) from exc
             except WriterPermanentError:
                 raise
-            except Exception as exc:  # cualquier otro error del adaptador es permanente
-                raise WriterPermanentError(f"Operación {op.op_id} falló: {exc}") from exc
+            except Exception as exc:
+                raise WriterPermanentError(
+                    f"Operación {op.op_id} falló: {exc}"
+                ) from exc
             elapsed = self.clock() - start
             if elapsed > self.timeout_s:
                 raise WriterTimeoutError(

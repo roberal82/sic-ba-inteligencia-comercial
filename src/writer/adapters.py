@@ -1,13 +1,9 @@
 """Adaptadores de destino para el writer productivo.
 
-``NullProductionAdapter`` es el default absoluto: no existe integración con el
-ERP productivo (``writer_present=false`` para producción real). Cualquier intento
-de usarlo falla cerrado con ``WriterAdapterNotConfigured``.
-
-``SandboxUpsertAdapter`` es un adaptador real pero aislado (JSON local dentro de
-``private-data`` o un sandbox de test) que permite probar el motor completo
-(apply/rollback/idempotencia/detección de modificación concurrente) sin tocar
-ningún sistema externo.
+El adaptador nulo bloquea toda escritura real. El adaptador sandbox permite
+probar apply/rollback/idempotencia sin tocar sistemas externos. El protocolo
+incluye compare_and_swap_restore: un rollback nunca debe sobrescribir un estado
+que haya cambiado después del apply.
 """
 
 from __future__ import annotations
@@ -15,16 +11,17 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import threading
 from pathlib import Path
 from typing import Mapping, Protocol
 
 
 class WriterAdapterNotConfigured(RuntimeError):
-    """No existe adaptador productivo real. Ver AGENTS.md: ningún agente escribe en producción."""
+    """No existe adaptador productivo real."""
 
 
 class WriterTransientError(RuntimeError):
-    """Error recuperable; el motor puede reintentar."""
+    """Error recuperable y explícitamente seguro de reintentar."""
 
 
 class WriterPermanentError(RuntimeError):
@@ -42,28 +39,45 @@ class ProductionAdapter(Protocol):
         self, target: str, key: Mapping[str, str], before_state: Mapping[str, object] | None
     ) -> None: ...
 
+    def compare_and_swap_restore(
+        self,
+        target: str,
+        key: Mapping[str, str],
+        expected_state: Mapping[str, object] | None,
+        before_state: Mapping[str, object] | None,
+    ) -> bool:
+        """Restaura solo si el estado actual coincide exactamente con expected_state."""
+
 
 class NullProductionAdapter:
     """Adaptador productivo inexistente. Bloquea toda operación real."""
 
-    def read(self, target: str, key: Mapping[str, str]) -> Mapping[str, object] | None:
+    def _blocked(self):
         raise WriterAdapterNotConfigured(
             "No hay adaptador productivo configurado para el ERP real."
         )
+
+    def read(self, target: str, key: Mapping[str, str]) -> Mapping[str, object] | None:
+        self._blocked()
 
     def apply(
         self, target: str, key: Mapping[str, str], payload: Mapping[str, object]
     ) -> Mapping[str, object]:
-        raise WriterAdapterNotConfigured(
-            "No hay adaptador productivo configurado para el ERP real."
-        )
+        self._blocked()
 
     def restore(
         self, target: str, key: Mapping[str, str], before_state: Mapping[str, object] | None
     ) -> None:
-        raise WriterAdapterNotConfigured(
-            "No hay adaptador productivo configurado para el ERP real."
-        )
+        self._blocked()
+
+    def compare_and_swap_restore(
+        self,
+        target: str,
+        key: Mapping[str, str],
+        expected_state: Mapping[str, object] | None,
+        before_state: Mapping[str, object] | None,
+    ) -> bool:
+        self._blocked()
 
 
 def _record_key(target: str, key: Mapping[str, str]) -> str:
@@ -72,61 +86,93 @@ def _record_key(target: str, key: Mapping[str, str]) -> str:
 
 
 class SandboxUpsertAdapter:
-    """Adaptador UPSERT aislado sobre un único archivo JSON local.
+    """Adaptador UPSERT aislado sobre un archivo JSON local.
 
-    Nunca borra registros de forma automática (UPSERT explícito, ver Fase C).
+    Las operaciones read/apply/restore/CAS están protegidas con un RLock para
+    cerrar la carrera entre el precheck y la restauración dentro del proceso.
+    Un adaptador productivo real deberá implementar la misma semántica CAS de
+    forma atómica en su backend (transacción/version/ETag).
     """
 
     def __init__(self, root: Path):
         self.root = Path(root).resolve()
         self.root.mkdir(parents=True, exist_ok=True)
         self._state_path = self.root / "sandbox_state.json"
+        self._lock = threading.RLock()
         if not self._state_path.is_file():
             self._write_state({})
 
     def _read_state(self) -> dict[str, dict[str, object]]:
-        if not self._state_path.is_file():
-            return {}
-        return json.loads(self._state_path.read_text(encoding="utf-8"))
+        with self._lock:
+            if not self._state_path.is_file():
+                return {}
+            return json.loads(self._state_path.read_text(encoding="utf-8"))
 
     def _write_state(self, state: Mapping[str, Mapping[str, object]]) -> None:
-        text = json.dumps(state, ensure_ascii=False, indent=2, sort_keys=True)
-        fd, tmp_name = tempfile.mkstemp(
-            prefix=f".{self._state_path.name}.", suffix=".tmp", dir=str(self.root)
-        )
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as handle:
-                handle.write(text)
-                handle.flush()
-                os.fsync(handle.fileno())
-            os.replace(tmp_name, self._state_path)
-        except Exception:
+        with self._lock:
+            text = json.dumps(state, ensure_ascii=False, indent=2, sort_keys=True)
+            fd, tmp_name = tempfile.mkstemp(
+                prefix=f".{self._state_path.name}.", suffix=".tmp", dir=str(self.root)
+            )
             try:
-                os.remove(tmp_name)
-            except OSError:
-                pass
-            raise
+                with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                    handle.write(text)
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                os.replace(tmp_name, self._state_path)
+            except Exception:
+                try:
+                    os.remove(tmp_name)
+                except OSError:
+                    pass
+                raise
 
     def read(self, target: str, key: Mapping[str, str]) -> Mapping[str, object] | None:
-        return self._read_state().get(_record_key(target, key))
+        with self._lock:
+            current = self._read_state().get(_record_key(target, key))
+            return dict(current) if current is not None else None
 
     def apply(
         self, target: str, key: Mapping[str, str], payload: Mapping[str, object]
     ) -> Mapping[str, object]:
-        state = self._read_state()
-        current = state.get(_record_key(target, key), {})
-        merged = {**current, **dict(payload)}
-        state[_record_key(target, key)] = merged
-        self._write_state(state)
-        return merged
+        with self._lock:
+            state = self._read_state()
+            record_key = _record_key(target, key)
+            current = state.get(record_key, {})
+            merged = {**current, **dict(payload)}
+            state[record_key] = merged
+            self._write_state(state)
+            return dict(merged)
 
     def restore(
         self, target: str, key: Mapping[str, str], before_state: Mapping[str, object] | None
     ) -> None:
-        state = self._read_state()
-        record_key = _record_key(target, key)
-        if before_state is None:
-            state.pop(record_key, None)
-        else:
-            state[record_key] = dict(before_state)
-        self._write_state(state)
+        with self._lock:
+            state = self._read_state()
+            record_key = _record_key(target, key)
+            if before_state is None:
+                state.pop(record_key, None)
+            else:
+                state[record_key] = dict(before_state)
+            self._write_state(state)
+
+    def compare_and_swap_restore(
+        self,
+        target: str,
+        key: Mapping[str, str],
+        expected_state: Mapping[str, object] | None,
+        before_state: Mapping[str, object] | None,
+    ) -> bool:
+        with self._lock:
+            state = self._read_state()
+            record_key = _record_key(target, key)
+            current = state.get(record_key)
+            expected = dict(expected_state) if expected_state is not None else None
+            if current != expected:
+                return False
+            if before_state is None:
+                state.pop(record_key, None)
+            else:
+                state[record_key] = dict(before_state)
+            self._write_state(state)
+            return True
