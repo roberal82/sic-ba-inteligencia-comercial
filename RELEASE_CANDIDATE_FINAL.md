@@ -1,86 +1,75 @@
-# SIC-BA — Release Candidate Final (Sprint 005)
+# SIC-BA — Release Candidate Final (Sprint 006)
 
 ## Identidad
 
-- **Branch**: `sprint/005-production-readiness`
-- **Commit**: `184f15d08fb412ceea26e8b6f22d4af7546292cb`
-- **Base**: `origin/feature/f4-orchestration-dryrun` @ `ec5ebca` (Sprint 004)
-- **Repositorio**: `roberal82/sic-ba-inteligencia-comercial`
-- **Python autorizado**: `C:\BLANCO_ASOCIADOS_AI\.venv\Scripts\python.exe`
+- **Staging branch**: `feature/f4-orchestration-dryrun`
+- **Sprint 006 merge**: `645625152151fe03d98267ddd48df0d11c30c82c`
+- **Repository**: `roberal82/sic-ba-inteligencia-comercial`
 
-## Tests
+## Regresión final
 
 ```
-266 passed, 4 subtests passed, 0 fail
+269 passed, 4 subtests passed, 0 fail
 ```
 
-(baseline previo a este sprint: 226 passed, 4 subtests, 0 fail — 40 tests
-nuevos para gates L4/L7, writer productivo, rollback, motor de cutover,
-observabilidad, panel operativo y ampliaciones al release gate).
+## CI post-merge
 
-## Verificaciones ejecutadas
+Todos en SUCCESS:
 
-- `python -m compileall -q src tests run_*.py` → sin errores.
-- `python -m pytest -q` → 266 passed, 4 subtests passed, 0 fail.
-- `python run_release_gate.py --evidence config/release_candidate.example.json --pretty` →
-  `technical_status=RC_READY`, `production_status=BLOCKED_L4`,
-  `writer_present=true`, `production_adapter_configured=false`,
-  `production_ready=false`.
-- `python run_ops_panel.py --config config/ops_panel.example.json` → panel
-  agregado sin errores.
-- Escaneo de seguridad (`shell=True`, pickle, eval/exec, os.system, yaml.load,
-  secretos hardcodeados) → sin hallazgos.
-- `git ls-files` contra patrones de payload privado → sin hallazgos.
-- `git diff --check` sobre los commits de este sprint → sin hallazgos.
+1. SIC-BA release candidate
+2. Production readiness tests
+3. Security check
+4. F4 orchestration tests
+5. F5 cutover simulation tests
+6. Financial governance tests
+7. Pipeline governance tests
 
-## Gates
+## Release gate
 
-| Gate | Estado | Motivo |
-|---|---|---|
-| Technical | `RC_READY` | Toda la evidencia técnica (`TECHNICAL_CHECKS`) en verde |
-| L4 | `FAIL_CLOSED` | Evidencia financiera externa real no disponible (ver bloqueos abajo) |
-| L7 | `NO_GO` | Depende técnicamente de L4 |
-| Writer | `READY / DISABLED` | Módulo implementado (`src/writer/`); `WriterInterlock` bloquea `APPLY` por defecto |
-| Rollback | `PROBADO` | 8 escenarios exigidos, todos verdes (`tests/test_production_writer.py`) |
-| Cutover engine | `PREPARADO / BLOQUEADO` | `execute_go_live()` siempre bloqueado en este sprint (sin adaptador productivo real) |
-| Producción | `LOCKED` | `production_ready=false`; no existe adaptador real contra el ERP |
-| Legacy (ADMIN 2026) | `ACTIVE` | Ningún código lo archiva automáticamente |
+```
+technical_status = RC_READY
+production_status = BLOCKED_L4
+l4_status = FAIL_CLOSED
+l7_status = NO_GO
+production_ready = false
+```
 
-## Known blockers (externos, no técnicos)
+## Hardening incorporado
 
-- CxC sin maestro homogéneo al corte 2026-09-26T23:59:00-03:00.
-- CxP sin reporte general homogéneo.
-- Itaú sin movimientos 22–26/09/2026.
-- Continental: septiembre disponible corresponde a 2025, no 2026.
-- Cheques pendientes de confirmación.
+- rollback CAS;
+- protección race precheck/restore;
+- rollback de STAGE/DRY_RUN bloqueado;
+- `APPLY_IN_PROGRESS` persistente;
+- replay de APPLY incompleto fail-closed;
+- L4/L7 calculados formalmente, no por flags booleanos autocertificados.
 
-## Rollback readiness
+## Readiness
 
-Probado end-to-end sobre `SandboxUpsertAdapter` (aislado, sin tocar nada
-externo): apply exitoso, apply parcial, excepción intermedia, rollback total,
-rollback idempotente, retry tras rollback con nuevo `run_id`, doble ejecución
-idempotente del mismo `run_id`, y detección de modificación externa
-concurrente (bloquea todo el rollback en `REQUIRES_HUMAN_REVIEW`). Ver
-`docs/ROLLBACK_RUNBOOK.md`.
+| Gate | Estado |
+|---|---|
+| Technical | RC_READY |
+| Writer | READY / DISABLED |
+| Rollback | TESTED / CAS_HARDENED |
+| L4 | FAIL_CLOSED |
+| L7 | NO_GO |
+| Cutover | READY / BLOCKED |
+| Production Adapter | NOT CONFIGURED |
+| Production | LOCKED |
+| Legacy | ACTIVE |
 
-## Writer readiness
+## Bloqueadores externos
 
-Implementado y **deshabilitado por defecto**: `WriterInterlock()` sin
-argumentos bloquea `APPLY` por 7 razones simultáneas. No existe ningún
-`ProductionAdapter` real contra el ERP — `NullProductionAdapter` es el único
-"adaptador real" y su única función es rechazar cualquier operación. Ver
-`docs/DEPLOYMENT.md` y `docs/SECURITY.md`.
+Al corte `2026-09-26T23:59:00-03:00` siguen faltando o sin cerrar:
 
-## Production readiness
+- maestro homogéneo CxC;
+- maestro homogéneo CxP;
+- movimientos Itaú 22–26/09;
+- extracto Continental septiembre 2026 válido;
+- confirmación de cheques;
+- conciliación nominal.
 
-`production_ready = false` y no puede ser `true` en este repositorio sin (a)
-evidencia financiera L4 real, (b) decisión L7 GO con aprobación humana
-identificada, (c) un `ProductionAdapter` real que hoy no existe ni está
-planeado construir sin autorización explícita adicional.
+## Política
 
-## Siguiente paso técnico
-
-Integrar `sprint/005-production-readiness` a
-`feature/f4-orchestration-dryrun` una vez que el usuario confirme el push
-(este sprint no hizo push a `origin` por defecto; ver conversación). `main`
-permanece intocado.
+No fusionar el PR de staging a `main` ni habilitar escritura productiva
+hasta que L4 PASS, L7 GO, rollback real, aprobación humana y adaptador
+productivo auditado coincidan en el mismo cutover.
