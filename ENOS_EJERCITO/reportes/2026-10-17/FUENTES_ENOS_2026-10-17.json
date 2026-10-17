@@ -1,0 +1,114 @@
+{
+  "fecha": "2026-10-17",
+  "corte": "2026-10-17T05:20:00-03:00",
+  "generado": "2026-10-17T06:15:30.604529-03:00",
+  "estado_fuentes": {
+    "DMH": {
+      "institucion": "DMH/DINAC Paraguay",
+      "url": "https://www.meteorologia.gov.py/",
+      "consulta": "2026-10-17T06:09:57.486779-03:00",
+      "http": null,
+      "error": "ProxyError: HTTPSConnectionPool(host='www.meteorologia.gov.py', port=443): Max retries exceeded with url: / (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 403 Forbidden')))",
+      "metodo": "HTML; parser pendiente",
+      "estado": "INACCESIBLE"
+    },
+    "CPC": {
+      "institucion": "NOAA/CPC ENSO Advisory",
+      "url": "https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso_advisory/",
+      "consulta": "2026-10-17T06:10:28.719490-03:00",
+      "http": null,
+      "error": "ProxyError: HTTPSConnectionPool(host='www.cpc.ncep.noaa.gov', port=443): Max retries exceeded with url: /products/analysis_monitoring/enso_advisory/ (Caused by ProxyError('Unable to connect to proxy', OSError('Tu",
+      "metodo": "HTML/texto 'ENSO Diagnostic Discussion'; parser pendiente",
+      "estado": "INACCESIBLE"
+    },
+    "OMM": {
+      "institucion": "Organización Meteorológica Mundial",
+      "url": "https://wmo.int/",
+      "consulta": "2026-10-17T06:10:59.754073-03:00",
+      "http": null,
+      "error": "ProxyError: HTTPSConnectionPool(host='wmo.int', port=443): Max retries exceeded with url: / (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 403 Forbidden')))",
+      "metodo": "HTML; parser pendiente",
+      "estado": "INACCESIBLE"
+    },
+    "EBY": {
+      "institucion": "Entidad Binacional Yacyretá",
+      "url": "https://www.eby.gov.py/",
+      "consulta": "2026-10-17T06:11:30.867608-03:00",
+      "http": null,
+      "error": "ProxyError: HTTPSConnectionPool(host='www.eby.gov.py', port=443): Max retries exceeded with url: / (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 403 Forbidden')))",
+      "metodo": "HTML; parser pendiente",
+      "estado": "INACCESIBLE"
+    },
+    "ITAIPU": {
+      "institucion": "Itaipú Binacional",
+      "url": "https://www.itaipu.gov.py/",
+      "consulta": "2026-10-17T06:12:01.922691-03:00",
+      "http": null,
+      "error": "ProxyError: HTTPSConnectionPool(host='www.itaipu.gov.py', port=443): Max retries exceeded with url: / (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 403 Forbidden')))",
+      "metodo": "HTML; parser pendiente",
+      "estado": "INACCESIBLE"
+    },
+    "SEN": {
+      "institucion": "Secretaría de Emergencia Nacional",
+      "url": "https://www.sen.gov.py/",
+      "consulta": "2026-10-17T06:12:32.995774-03:00",
+      "http": null,
+      "error": "ProxyError: HTTPSConnectionPool(host='www.sen.gov.py', port=443): Max retries exceeded with url: / (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 403 Forbidden')))",
+      "metodo": "HTML; parser pendiente",
+      "estado": "INACCESIBLE"
+    },
+    "COE": {
+      "institucion": "COE Ayolas (complementaria, no primaria)",
+      "url": "https://coe.ordium.fun/",
+      "consulta": "2026-10-17T06:13:03.795428-03:00",
+      "http": null,
+      "error": "ProxyError: HTTPSConnectionPool(host='coe.ordium.fun', port=443): Max retries exceeded with url: / (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 403 Forbidden')))",
+      "metodo": "HTML; contrastar con EBY/SEN",
+      "estado": "INACCESIBLE"
+    },
+    "MADES": {
+      "institucion": "MADES",
+      "url": "https://www.mades.gov.py/",
+      "consulta": "2026-10-17T06:13:34.871708-03:00",
+      "http": null,
+      "error": "ProxyError: HTTPSConnectionPool(host='www.mades.gov.py', port=443): Max retries exceeded with url: / (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 403 Forbidden')))",
+      "metodo": "HTML",
+      "estado": "INACCESIBLE"
+    },
+    "INFONA": {
+      "institucion": "INFONA",
+      "url": "https://www.infona.gov.py/",
+      "consulta": "2026-10-17T06:14:05.988634-03:00",
+      "http": null,
+      "error": "ProxyError: HTTPSConnectionPool(host='www.infona.gov.py', port=443): Max retries exceeded with url: / (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 403 Forbidden')))",
+      "metodo": "HTML",
+      "estado": "INACCESIBLE"
+    },
+    "INE": {
+      "institucion": "INE",
+      "url": "https://www.ine.gov.py/",
+      "consulta": "2026-10-17T06:14:37.230172-03:00",
+      "http": null,
+      "error": "ProxyError: HTTPSConnectionPool(host='www.ine.gov.py', port=443): Max retries exceeded with url: / (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 403 Forbidden')))",
+      "metodo": "HTML",
+      "estado": "INACCESIBLE"
+    },
+    "PNA": {
+      "institucion": "Prefectura General Naval",
+      "estado": "NO_LOCALIZADA",
+      "metodo": "POR_LOCALIZAR: canal oficial no verificado"
+    },
+    "ARMADA": {
+      "institucion": "Armada Paraguaya",
+      "estado": "NO_LOCALIZADA",
+      "metodo": "POR_LOCALIZAR: canal oficial no verificado"
+    },
+    "SATSEN": {
+      "institucion": "SAT-SEN",
+      "estado": "NO_LOCALIZADA",
+      "metodo": "POR_LOCALIZAR: portal vigente no verificado"
+    }
+  },
+  "registros_validados": [],
+  "registros_rechazados": []
+}

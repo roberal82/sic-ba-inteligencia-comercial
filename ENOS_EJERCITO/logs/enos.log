@@ -1,0 +1,17 @@
+2026-10-17 09:09:57,486 INFO INICIO ejecución diaria 2026-10-17T06:09:57.486293-03:00
+2026-10-17 09:10:28,711 INFO DMH -> None ProxyError: HTTPSConnectionPool(host='www.meteorologia.gov.py', port=443): Max retries exceeded with url: / (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 403 Forbidden')))
+2026-10-17 09:10:59,753 INFO CPC -> None ProxyError: HTTPSConnectionPool(host='www.cpc.ncep.noaa.gov', port=443): Max retries exceeded with url: /products/analysis_monitoring/enso_advisory/ (Caused by ProxyError('Unable to connect to proxy', OSError('Tu
+2026-10-17 09:11:30,867 INFO OMM -> None ProxyError: HTTPSConnectionPool(host='wmo.int', port=443): Max retries exceeded with url: / (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 403 Forbidden')))
+2026-10-17 09:12:01,922 INFO EBY -> None ProxyError: HTTPSConnectionPool(host='www.eby.gov.py', port=443): Max retries exceeded with url: / (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 403 Forbidden')))
+2026-10-17 09:12:32,995 INFO ITAIPU -> None ProxyError: HTTPSConnectionPool(host='www.itaipu.gov.py', port=443): Max retries exceeded with url: / (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 403 Forbidden')))
+2026-10-17 09:13:03,795 INFO SEN -> None ProxyError: HTTPSConnectionPool(host='www.sen.gov.py', port=443): Max retries exceeded with url: / (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 403 Forbidden')))
+2026-10-17 09:13:34,871 INFO COE -> None ProxyError: HTTPSConnectionPool(host='coe.ordium.fun', port=443): Max retries exceeded with url: / (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 403 Forbidden')))
+2026-10-17 09:14:05,981 INFO MADES -> None ProxyError: HTTPSConnectionPool(host='www.mades.gov.py', port=443): Max retries exceeded with url: / (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 403 Forbidden')))
+2026-10-17 09:14:37,229 INFO INFONA -> None ProxyError: HTTPSConnectionPool(host='www.infona.gov.py', port=443): Max retries exceeded with url: / (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 403 Forbidden')))
+2026-10-17 09:15:08,265 INFO INE -> None ProxyError: HTTPSConnectionPool(host='www.ine.gov.py', port=443): Max retries exceeded with url: / (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 403 Forbidden')))
+2026-10-17 09:15:08,266 WARNING PNA: canal oficial no localizado
+2026-10-17 09:15:08,266 WARNING ARMADA: canal oficial no localizado
+2026-10-17 09:15:08,266 WARNING SATSEN: canal oficial no localizado
+2026-10-17 09:15:11,982 INFO Generado 2026-10-17: 0 válidos, 0 rechazados
+2026-10-17 09:15:12,047 INFO FIN ejecución diaria rc=0
+2026-10-17 09:15:32,289 INFO Generado 2026-10-17: 0 válidos, 0 rechazados
