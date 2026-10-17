@@ -49,8 +49,8 @@ def tabla(regs, vacio):
 
 CSS = f"""*{{box-sizing:border-box;margin:0}}body{{background:{PALETA['negro']};color:{PALETA['blanco']};font-family:Arial,Helvetica,sans-serif;width:1080px}}
 .hd{{background:{PALETA['verde']};border-bottom:6px solid {PALETA['dorado']};padding:18px;text-align:center}}
-.esc{{width:150px;height:150px;margin:0 auto 8px;display:flex;align-items:center;justify-content:center}}
-.esc img{{max-width:150px;max-height:150px;object-fit:contain}}
+.esc{{width:auto;height:230px;margin:0 auto 8px;display:flex;align-items:center;justify-content:center}}
+.esc img{{height:230px;width:auto}}
 .esc .falta{{border:3px dashed {PALETA['rojo']};color:{PALETA['rojo']};font-size:22px;font-weight:bold;padding:12px}}
 h1{{color:{PALETA['dorado']};font-size:46px}}h2{{font-size:32px}}.sub{{font-size:26px;margin-top:4px}}
 .b{{margin:9px 24px;padding:10px 20px;border-left:8px solid {PALETA['dorado']};background:{PALETA['verde']}}}
