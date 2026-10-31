@@ -1,0 +1,25 @@
+# Umbrales y pesos configurables. Cada alerta registra la version de este archivo.
+version = "2026.1"
+
+[score]
+# Los pesos deben sumar 1.0
+peso_volumen = 0.40
+peso_frecuencia = 0.30
+peso_mora = 0.30
+umbral_rojo = 60.0
+umbral_verde = 80.0
+
+[cobranza]
+dias_rojo = 30
+# Monto vencido (por moneda) a partir del cual la alerta es roja
+monto_rojo = { PYG = 20000000, USD = 3000 }
+
+[vencimientos]
+ventana_dias = 7
+
+[concentracion]
+participacion_pct = 25.0
+
+[liquidez]
+ratio_verde = 1.20
+ratio_amarillo = 1.00
