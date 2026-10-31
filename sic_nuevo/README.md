@@ -12,6 +12,11 @@ descritas en el analisis. No usa ni modifica `src/`, `ia/` ni `app.py` del proye
 ```
 python -m unittest discover -s tests
 python -m sicnuevo.cli reporte_cobros.txt reporte_pagos.txt --db sic.db
+python -m sicnuevo.dashboard --db sic.db --port 8000   # http://127.0.0.1:8000
 ```
 
-Pendiente: dashboards (leer de SQLite), autenticacion, forecast con modelo estacional, asistente sobre vistas SQL.
+`dashboard.py`: pagina de solo lectura (conexion SQLite `mode=ro`, escucha solo en 127.0.0.1) con KPIs por moneda,
+antiguedad de cartera, mayores deudores, semaforo de liquidez a 30 dias y alertas. En la liquidez, los cobros
+vencidos cuentan como cobrables dentro de los 30 dias y el saldo bancario se asume 0 (supuestos a revisar).
+
+Pendiente: autenticacion (obligatoria antes de exponer el dashboard en red), forecast con modelo estacional, asistente sobre vistas SQL.

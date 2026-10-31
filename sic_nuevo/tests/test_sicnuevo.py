@@ -3,7 +3,7 @@ from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from sicnuevo import alertas, parsers, scoring, store
+from sicnuevo import alertas, dashboard, parsers, scoring, store
 from sicnuevo.models import Cobro
 from sicnuevo.money import parse_monto
 from sicnuevo.reglas import cargar_reglas
@@ -85,6 +85,29 @@ class Tests(unittest.TestCase):
         self.assertEqual(alertas.semaforo_liquidez(100, 100, 0, r)["nivel"], "AMARILLO")
         self.assertEqual(alertas.semaforo_liquidez(50, 100, 0, r)["nivel"], "ROJO")
         self.assertEqual(alertas.semaforo_liquidez(130, 100, 0, r)["nivel"], "VERDE")
+
+    def test_dashboard_calculo_por_moneda(self):
+        d = dashboard.calcular(db(), HOY, cargar_reglas())
+        self.assertEqual(set(d["monedas"]), {"PYG", "USD"})
+        pyg = d["monedas"]["PYG"]
+        self.assertEqual(pyg["por_cobrar"], 400000.0)
+        self.assertEqual(pyg["vencido"], 400000.0)
+        self.assertEqual(pyg["por_pagar"], 500000.0)
+        self.assertEqual(pyg["cheques"], 5000000.0)
+        self.assertEqual(sum(a["saldo"] for a in pyg["aging"]), 400000.0)
+        self.assertEqual(pyg["liquidez"]["nivel"], "ROJO")  # 400k / 5.5M
+        self.assertEqual(d["monedas"]["USD"]["por_cobrar"], 2000.5)
+
+    def test_dashboard_render_escapa_html(self):
+        con = store.abrir()
+        store.cargar(con, [Cobro("<script>x</script>", "1", date(2026, 1, 1), date(2026, 2, 1), "PYG", 10, 10)])
+        html = dashboard.render(dashboard.calcular(con, HOY, cargar_reglas()))
+        self.assertNotIn("<script>x", html)
+        self.assertIn("&lt;script&gt;", html)
+
+    def test_dashboard_vacio(self):
+        html = dashboard.render(dashboard.calcular(store.abrir(), HOY, cargar_reglas()))
+        self.assertIn("Sin datos cargados", html)
 
 
 if __name__ == "__main__":
