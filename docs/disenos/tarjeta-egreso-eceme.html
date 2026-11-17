@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tarjeta de Egreso ECEME</title>
+<!-- Diseño de prueba generado con la skill ui-ux-pro-max:
+     estilo Minimalism & Swiss (variance 2), tipografía "Legal Professional"
+     (EB Garamond + Lato), acento dorado; paleta institucional ECEME. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --azul-noche: #0B1F3A;
+    --azul-eceme: #1F4E8C;
+    --oro: #B8962E;
+    --oro-claro: #D9C27A;
+    --papel: #FBF8F1;
+    --tinta: #1E293B;
+    --tinta-suave: #475569;
+    --font-heading: "EB Garamond", Georgia, serif;
+    --font-body: "Lato", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #E5E7EB;
+    font-family: var(--font-body);
+    color: var(--tinta);
+    padding: 32px 16px;
+  }
+  .hoja {
+    display: flex; flex-wrap: wrap; gap: 32px; justify-content: center;
+  }
+  .cara {
+    width: 148mm; height: 210mm;            /* A5 vertical */
+    max-width: 100%;
+    position: relative; overflow: hidden;
+    box-shadow: 0 10px 30px rgba(11,31,58,.25);
+  }
+  .etiqueta {
+    text-align: center; font-size: 12px; letter-spacing: .15em;
+    text-transform: uppercase; color: var(--tinta-suave); margin-bottom: 8px;
+  }
+
+  /* ---------- PORTADA ---------- */
+  .portada {
+    background: radial-gradient(ellipse at 50% 30%, var(--azul-eceme) 0%, var(--azul-noche) 70%);
+    color: #fff; text-align: center;
+    display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+    padding: 20mm 14mm 16mm;
+  }
+  .marco {
+    position: absolute; inset: 7mm; border: 1px solid var(--oro); pointer-events: none;
+  }
+  .marco::after {
+    content: ""; position: absolute; inset: 2.2mm; border: .4px solid rgba(217,194,122,.5);
+  }
+  .franja {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 3.2mm;
+    background: linear-gradient(to bottom, #D52B1E 0 33.3%, #fff 33.3% 66.6%, #0038A8 66.6%);
+  }
+  .institucion {
+    font-family: var(--font-body); font-weight: 700; font-size: 10.5pt;
+    letter-spacing: .22em; text-transform: uppercase; color: var(--oro-claro); line-height: 1.6;
+    text-wrap: balance;
+  }
+  .institucion span { display: block; font-weight: 300; letter-spacing: .12em; color: #fff; font-size: 9.5pt; text-transform: none; font-style: italic; font-family: var(--font-heading); }
+  .emblema { width: 46mm; height: 46mm; margin: 6mm 0; }
+  .titulo {
+    font-family: var(--font-heading); font-weight: 600; font-size: 34pt;
+    letter-spacing: .04em; line-height: 1.05;
+  }
+  .titulo small { display: block; font-size: 13pt; font-weight: 400; font-style: italic; color: var(--oro-claro); letter-spacing: .08em; margin-top: 3mm; }
+  .separador { display: flex; align-items: center; justify-content: center; gap: 3mm; color: var(--oro); margin: 5mm 0; }
+  .separador::before, .separador::after { content: ""; width: 22mm; height: 1px; background: var(--oro); }
+  .promocion { font-size: 10pt; letter-spacing: .3em; text-transform: uppercase; }
+  .promocion strong { display: block; font-family: var(--font-heading); font-size: 20pt; letter-spacing: .06em; text-transform: none; color: var(--oro-claro); margin-top: 2mm; font-weight: 500; }
+  .lema { font-family: var(--font-heading); font-style: italic; font-size: 12pt; letter-spacing: .2em; color: var(--oro-claro); }
+
+  /* ---------- INTERIOR ---------- */
+  .interior {
+    background: var(--papel);
+    padding: 18mm 16mm 16mm;
+    display: flex; flex-direction: column; text-align: center;
+  }
+  .interior .marco { border-color: var(--oro); }
+  .interior .marco::after { border-color: rgba(184,150,46,.35); }
+  .encabezado { font-size: 9pt; letter-spacing: .22em; text-transform: uppercase; color: var(--azul-eceme); font-weight: 700; }
+  .texto {
+    font-family: var(--font-heading); font-size: 13pt; line-height: 1.6; color: var(--tinta);
+    margin-top: 10mm;
+  }
+  .nombre {
+    font-family: var(--font-heading); font-weight: 600; font-size: 24pt; color: var(--azul-noche);
+    margin: 6mm 0 2mm; line-height: 1.15;
+  }
+  .grado { font-size: 10pt; letter-spacing: .18em; text-transform: uppercase; color: var(--tinta-suave); }
+  .curso {
+    margin: 8mm auto 0; padding: 4mm 6mm; border-top: 1px solid var(--oro); border-bottom: 1px solid var(--oro);
+    font-family: var(--font-heading); font-size: 14pt; color: var(--azul-eceme); font-weight: 500; max-width: 100mm;
+  }
+  .detalles {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; margin-top: 10mm; text-align: left;
+    font-size: 9.5pt;
+  }
+  .detalles dt { font-size: 7.5pt; letter-spacing: .2em; text-transform: uppercase; color: var(--oro); font-weight: 700; }
+  .detalles dd { color: var(--tinta); margin-top: 1mm; line-height: 1.4; }
+  .cita {
+    margin-top: auto; font-family: var(--font-heading); font-style: italic; font-size: 11pt;
+    color: var(--tinta-suave); line-height: 1.5;
+  }
+  .cita b { display: block; font-style: normal; font-family: var(--font-body); font-size: 8pt; letter-spacing: .25em; text-transform: uppercase; color: var(--azul-eceme); margin-top: 3mm; }
+  .ph { background: rgba(184,150,46,.14); border-radius: 2px; padding: 0 1.5mm; }
+  .portada .ph { background: rgba(217,194,122,.18); }
+
+  @page { size: A5 portrait; margin: 0; }
+  @media print {
+    body { background: none; padding: 0; }
+    .hoja { display: block; }
+    .etiqueta { display: none; }
+    .cara { box-shadow: none; page-break-after: always; }
+    .ph { background: none; }
+  }
+</style>
+</head>
+<body>
+<div class="hoja">
+
+  <!-- CARA 1: PORTADA -->
+  <section>
+    <p class="etiqueta">Portada</p>
+    <div class="cara portada">
+      <div class="marco"></div>
+      <p class="institucion">Escuela de Comando y Estado Mayor del Ejército
+        <span>“Mcal. José Félix Estigarribia”</span></p>
+
+      <!-- Marcador de posición: reemplazar por el escudo oficial de la ECEME (PNG/SVG) -->
+      <svg class="emblema" viewBox="0 0 200 200" role="img" aria-label="Espacio para el escudo de la ECEME">
+        <g fill="none" stroke="#B8962E" stroke-width="2">
+          <circle cx="100" cy="100" r="92"/>
+          <circle cx="100" cy="100" r="84" stroke-width=".8" opacity=".6"/>
+        </g>
+        <g fill="#B8962E" opacity=".9">
+          <!-- laureles -->
+          <defs><ellipse id="hoja" cx="0" cy="0" rx="5" ry="11"/></defs>
+          <use href="#hoja" transform="translate(52 140) rotate(-35)"/>
+          <use href="#hoja" transform="translate(44 122) rotate(-20)"/>
+          <use href="#hoja" transform="translate(40 102) rotate(-5)"/>
+          <use href="#hoja" transform="translate(42 82) rotate(12)"/>
+          <use href="#hoja" transform="translate(50 64) rotate(28)"/>
+          <use href="#hoja" transform="translate(148 140) rotate(35)"/>
+          <use href="#hoja" transform="translate(156 122) rotate(20)"/>
+          <use href="#hoja" transform="translate(160 102) rotate(5)"/>
+          <use href="#hoja" transform="translate(158 82) rotate(-12)"/>
+          <use href="#hoja" transform="translate(150 64) rotate(-28)"/>
+        </g>
+        <polygon fill="#D9C27A" points="100,58 109,86 139,86 115,103 124,131 100,114 76,131 85,103 61,86 91,86"/>
+        <text x="100" y="160" text-anchor="middle" font-family="Lato, Arial" font-size="9" letter-spacing="2" fill="#D9C27A">ESCUDO OFICIAL</text>
+      </svg>
+
+      <div>
+        <h1 class="titulo">Tarjeta de Egreso<small>Curso de Comando y Estado Mayor</small></h1>
+        <div class="separador">✦</div>
+        <p class="promocion">Promoción<strong><span class="ph">“[Nombre de la Promoción]”</span></strong></p>
+        <p class="promocion" style="margin-top:4mm">2026</p>
+      </div>
+
+      <p class="lema">VENCER O MORIR</p>
+      <div class="franja" aria-hidden="true"></div>
+    </div>
+  </section>
+
+  <!-- CARA 2: INTERIOR -->
+  <section>
+    <p class="etiqueta">Interior</p>
+    <div class="cara interior">
+      <div class="marco"></div>
+      <p class="encabezado">Ejército Paraguayo · ECEME</p>
+
+      <p class="texto">La Dirección de la Escuela de Comando y Estado Mayor del Ejército
+        se complace en acompañar el egreso de</p>
+
+      <p class="nombre"><span class="ph">[Nombre y Apellido]</span></p>
+      <p class="grado"><span class="ph">[Grado] · [Arma]</span></p>
+
+      <p class="curso">Diplomado de Estado Mayor<br>Maestría en Ciencias Militares</p>
+
+      <dl class="detalles">
+        <div><dt>Fecha</dt><dd><span class="ph">[día] de [mes] de 2026</span></dd></div>
+        <div><dt>Hora</dt><dd><span class="ph">[00:00] h</span></dd></div>
+        <div><dt>Lugar</dt><dd><span class="ph">[Lugar de la ceremonia]</span></dd></div>
+        <div><dt>Tenida</dt><dd><span class="ph">[Uniforme / traje]</span></dd></div>
+      </dl>
+
+      <p class="cita">“<span class="ph">[Frase o pensamiento de la promoción]</span>”
+        <b>Promoción 2026</b></p>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>
